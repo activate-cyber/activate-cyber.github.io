@@ -22,6 +22,7 @@ Sauf autorisation explicite, il est interdit de :
 ## Contact
 
 Pour toute demande concernant l'utilisation du contenu ou de la marque :
+Activate.cyber@gmail.com
 
 **Activate**  
 © 2026 Activate. Tous droits réservés.
