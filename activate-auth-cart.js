@@ -102,8 +102,10 @@ function parseEuro(text) {
 }
 
 function setupUI() {
+  if (window.ACTIVATE_UI_SETUP_DONE) return;
   const nav = document.querySelector(".cyber-navbar nav");
   if (!nav) return;
+  window.ACTIVATE_UI_SETUP_DONE = true;
 
   // Supprime les contrôles éventuellement injectés par d'anciennes versions.
   document.querySelectorAll(".cyber-account-button, .cyber-cart-button").forEach(el => el.remove());
@@ -422,8 +424,8 @@ function setupUI() {
   // Synchronise l'affichage des prix avec le bouton Mensuel / Annuel de la page.
   // En annuel, le gros prix est le montant réellement facturé en une fois.
   function syncActivatePricing() {
-    const annualToggle = document.querySelector('.cyber-billing-switch button[aria-pressed="true"]');
-    const isAnnual = !!document.querySelector('.cyber-billing-switch button.is-active') && document.querySelector('.cyber-billing-switch button.is-active')?.textContent?.trim().toLowerCase() === "annuel";
+    const activeBillingButton = document.querySelector('.cyber-billing-switch button.is-active, .cyber-billing-switch button[aria-pressed="true"]');
+    const isAnnual = activeBillingButton?.textContent?.trim().toLowerCase() === "annuel";
     const plans = Array.from(document.querySelectorAll(".cyber-plan"));
     const annualPrices = [228, 428];
 
@@ -458,9 +460,21 @@ function setupUI() {
   }
 
   syncActivatePricing();
-  const pricingObserver = new MutationObserver(() => syncActivatePricing());
-  pricingObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["aria-pressed", "class"] });
-  setInterval(syncActivatePricing, 250);
+
+  // Surveille uniquement le sélecteur Mensuel/Annuel au lieu de tout le document.
+  // Cela évite une boucle de mutations qui pouvait faire charger la page en continu.
+  const billingSwitch = document.querySelector('.cyber-billing-switch');
+  if (billingSwitch && !billingSwitch.dataset.activatePricingObserver) {
+    billingSwitch.dataset.activatePricingObserver = "1";
+    const pricingObserver = new MutationObserver(() => syncActivatePricing());
+    pricingObserver.observe(billingSwitch, { childList: true, subtree: true, attributes: true, attributeFilter: ["aria-pressed", "class"] });
+  }
+
+  document.addEventListener("click", (event) => {
+    if (event.target.closest?.(".cyber-billing-switch")) {
+      setTimeout(syncActivatePricing, 0);
+    }
+  });
 
   // Interception globale en phase capture : elle bloque aussi le handler React
   // du site original, afin qu'un abonnement ne puisse jamais être ajouté sans compte.
@@ -480,7 +494,8 @@ function setupUI() {
       const card = button.closest(".cyber-plan, .cyber-school-plan");
       if (!card) return;
       const name = card.querySelector(".cyber-plan-name, .cyber-school-plan h4")?.textContent?.trim() || "Abonnement Activate";
-      const annual = document.querySelector(".cyber-billing-switch button.is-active")?.textContent?.trim().toLowerCase() === "annuel";
+      const activeBillingButton = document.querySelector(".cyber-billing-switch button.is-active, .cyber-billing-switch button[aria-pressed=\"true\"]");
+      const annual = activeBillingButton?.textContent?.trim().toLowerCase() === "annuel";
       const planIndex = Array.from(document.querySelectorAll(".cyber-plan")).indexOf(card);
       const price = annual && [228,428][planIndex] ? [228,428][planIndex] : parseEuro(button.textContent) || parseEuro(card.querySelector(".cyber-plan-price strong")?.textContent);
       const period = annual ? "annuel" : "mensuel";
@@ -641,5 +656,4 @@ window.addEventListener("activate-auth-changed", renderDashboardIfPresent);
 window.addEventListener("storage", renderDashboardIfPresent);
 window.addEventListener("hashchange", renderDashboardIfPresent);
 
-waitForApp(setupUI);
 waitForApp(setupUI);
