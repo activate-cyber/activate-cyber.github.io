@@ -546,7 +546,7 @@ function setupUI() {
     }
   };
 
-  onAuthStateChanged(auth, (user) => {
+  onAuthStateChanged(auth, async (user) => {
     authBtn.textContent = user
       ? (user.email?.split("@")[0] || "Compte")
       : "Connexion";
