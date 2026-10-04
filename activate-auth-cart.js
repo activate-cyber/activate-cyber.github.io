@@ -150,7 +150,6 @@ function setupUI() {
 
   const dashboard = document.createElement("a");
   dashboard.href = dashboardData.href;
-  dashboard.dataset.activateDashboard = "1";
   dashboard.textContent = dashboardData.text;
   linkShell.appendChild(dashboard);
 
@@ -301,13 +300,21 @@ function setupUI() {
     if (event.target === dashboardOverlay) closeDashboard.click();
   });
 
-  // Les catégories utilisent les vraies ancres de la page principale (#services,
-  // #about, #subscriptions, #school-subscriptions). On ne les transforme pas
-  // en /dashboard.html#... : le navigateur doit simplement aller à la section.
-  // Seul le Dashboard ouvre la superposition.
-  dashboard.addEventListener("click", (event) => {
-    event.preventDefault();
-    openDashboardOverlay(dashboard.href);
+  linkShell.querySelectorAll("a").forEach((a) => {
+    a.addEventListener("click", (event) => {
+      const url = new URL(a.href, window.location.origin);
+      const hash = url.hash || "";
+
+      // Seul le Dashboard est une superposition.
+      // Les autres liens doivent utiliser les ancres normales de la page principale
+      // afin de faire défiler directement jusqu'à leur section.
+      if (hash !== "#dashboard") {
+        return;
+      }
+
+      event.preventDefault();
+      openDashboardOverlay(a.href);
+    });
   });
 
   // Auth modal.
@@ -410,9 +417,7 @@ function setupUI() {
     window.dispatchEvent(new CustomEvent("activate-auth-changed"));
   });
 
-  // Les boutons de chaque formule deviennent des ajouts au panier.
-  // Le prix est relu AU MOMENT du clic afin que le changement Mensuel/Annuel
-  // soit bien pris en compte après le rerender React.
+  // Les boutons de chaque formule deviennent des ajouts au panier avec le prix réel.
   document.querySelectorAll(".cyber-plan-action").forEach((button) => {
     if (button.dataset.activatePaymentBound === "1") return;
     button.dataset.activatePaymentBound = "1";
@@ -420,50 +425,37 @@ function setupUI() {
     const card = button.closest(".cyber-plan, .cyber-school-plan");
     if (!card) return;
 
-    const readCurrentPlan = () => {
-      const name =
-        card.querySelector(".cyber-plan-name, .cyber-school-plan h4")?.textContent?.trim() ||
-        "Abonnement Activate";
-      const billing = card.querySelector(".cyber-plan-billing")?.textContent || "";
-      let price = parseEuro(billing);
+    const name =
+      card.querySelector(".cyber-plan-name, .cyber-school-plan h4")?.textContent?.trim() ||
+      "Abonnement Activate";
 
-      if (!price) {
-        const priceNode =
-          card.querySelector(".cyber-plan-price strong, .cyber-school-price strong");
-        price = parseEuro(priceNode?.textContent);
-      }
+    const billing = card.querySelector(".cyber-plan-billing")?.textContent || "";
+    let price = parseEuro(billing);
 
-      const period =
-        billing.includes("par an") || billing.includes("annuel")
-          ? "annuel"
-          : "mensuel";
+    if (!price) {
+      const priceNode =
+        card.querySelector(".cyber-plan-price strong, .cyber-school-price strong");
+      price = parseEuro(priceNode?.textContent);
+    }
 
-      return { name, price: Number(price || 0), period };
-    };
+    const period =
+      billing.includes("an") && !billing.includes("mois")
+        ? "annuel"
+        : "mensuel";
 
-    const refreshButtonLabel = () => {
-      const current = readCurrentPlan();
-      button.textContent = `Ajouter au panier — ${formatEUR(current.price)}`;
-    };
-
-    refreshButtonLabel();
-
+    button.href = "#";
+    button.removeAttribute("target");
+    button.textContent = `Ajouter au panier — ${formatEUR(price)}`;
     button.addEventListener("click", (event) => {
       event.preventDefault();
 
-      const current = readCurrentPlan();
       const items = cart();
-      if (!items.some(x => x.name === current.name && Number(x.price) === current.price && x.period === current.period)) {
-        items.push({ name: current.name, price: current.price, period: current.period });
+      if (!items.some(x => x.name === name && Number(x.price) === Number(price))) {
+        items.push({ name, price: Number(price), period });
         saveCart(items);
       }
       openCart();
     });
-
-    // React remplace le contenu du sélecteur Mensuel/Annuel. On actualise
-    // le libellé du bouton quand le prix affiché change.
-    const observer = new MutationObserver(refreshButtonLabel);
-    observer.observe(card, { childList: true, subtree: true, characterData: true });
   });
 
   updateCartBadge();
