@@ -12,62 +12,16 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Activate — Abonnements de cybersécurité logicielle" />
     <meta name="twitter:description" content="Découvrez les abonnements Activate, l’accès anticipé aux mises à jour et les tarifs Activate CDI pour les établissements scolaires." />
-    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <script src="./firebase-config.js"></script>
-    <script src="./assets/activate-firebase.js"></script>
-    <script type="module" crossorigin src="./assets/index-BBRzz54C.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-sEfk9t9i.css">
+    <script type="module" crossorigin src="/assets/index-BBRzz54C.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-sEfk9t9i.css">
+    <link rel="stylesheet" href="/activate-addons.css">
   </head>
   <body>
     <div id="root"></div>
-  <script>
-(function(){
-  function setup(){
-    if(document.getElementById("activate-extra-actions")) return;
-    const nav = document.querySelector(".cyber-navbar nav");
-    if(!nav) return false;
-    const wrap=document.createElement("span");
-    wrap.id="activate-extra-actions";
-    wrap.style.cssText="display:flex;align-items:center;gap:10px;margin-left:2px";
-    const btn=document.createElement("button");
-    btn.id="activate-login-button";
-    btn.type="button";
-    btn.textContent="Connexion";
-    btn.style.cssText="border:1px solid #303030;background:#050505;color:#fff;padding:11px 16px;border-radius:7px;cursor:pointer;font:13px Inter,Arial,sans-serif";
-    wrap.appendChild(btn);
-    nav.appendChild(wrap);
-    btn.addEventListener("click", async ()=>{
-      if(window.activateFirebaseIdToken && localStorage.getItem("activate_account")){
-        const email=JSON.parse(localStorage.getItem("activate_account")||"{}").email||"Compte";
-        if(confirm("Connecté en tant que "+email+"\\n\\nOK = se déconnecter")){
-          try{await window.activateFirebaseLogout();}catch(e){console.error(e);}
-          localStorage.removeItem("activate_account");
-          btn.textContent="Connexion";
-        }
-        return;
-      }
-      const email=prompt("Adresse e-mail :");
-      if(!email) return;
-      try{
-        await window.activateFirebaseLogin(email.trim());
-        alert("Un lien de connexion a été envoyé à ton adresse e-mail.");
-      }catch(e){
-        alert("Connexion impossible : "+(e?.message||e));
-      }
-    });
-    if(localStorage.getItem("activate_account")){
-      try{btn.textContent="Compte";}catch{}
-    }
-    return true;
-  }
-  function wait(){
-    if(setup()) return;
-    setTimeout(wait,250);
-  }
-  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",wait); else wait();
-})();
-</script>
+    <script src="/firebase-config.js"></script>
+    <script type="module" src="/activate-auth-cart.js"></script>
   </body>
 </html>
