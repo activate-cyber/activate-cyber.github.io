@@ -101,6 +101,146 @@ function parseEuro(text) {
   return m ? Number(m[1].replace(",", ".")) : 0;
 }
 
+
+  async function getActivateApiUrl() {
+    return String(window.ACTIVATE_API_URL || "").replace(/\/$/, "");
+  }
+
+  async function apiJson(path, options = {}) {
+    const base = await getActivateApiUrl();
+    if (!base) throw new Error("API Activate non configurée.");
+    const headers = { ...(options.headers || {}) };
+    const user = auth.currentUser;
+    if (user) headers.Authorization = `Bearer ${await user.getIdToken()}`;
+    const response = await fetch(`${base}${path}`, { ...options, headers });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `API HTTP ${response.status}`);
+    return data;
+  }
+
+  function applySiteSettings(settings) {
+    if (!settings) return;
+    const plans = Array.isArray(settings.plans) ? settings.plans : [];
+    const cards = Array.from(document.querySelectorAll(".cyber-plan"));
+    cards.forEach((card, index) => {
+      const p = plans[index];
+      if (!p) return;
+      const name = card.querySelector(".cyber-plan-name");
+      const monthly = card.querySelector(".cyber-plan-price strong");
+      if (name) name.textContent = p.name;
+      if (monthly) {
+        card.dataset.activateMonthlyPrice = String(Number(p.monthlyPrice));
+      }
+      const active = document.querySelector('.cyber-billing-switch button.is-active, .cyber-billing-switch button[aria-pressed="true"]');
+      if (active?.textContent?.trim().toLowerCase() === "annuel") {
+        if (monthly) monthly.textContent = formatEUR(p.annualPrice);
+        const period = card.querySelector(".cyber-plan-price span");
+        if (period) period.textContent = "/ an";
+      } else if (monthly) {
+        monthly.textContent = formatEUR(p.monthlyPrice);
+        const period = card.querySelector(".cyber-plan-price span");
+        if (period) period.textContent = "/ mois";
+      }
+      const action = card.querySelector(".cyber-plan-action");
+      if (action) action.textContent = `Ajouter au panier — ${formatEUR(active?.textContent?.trim().toLowerCase() === "annuel" ? p.annualPrice : p.monthlyPrice)}`;
+    });
+
+    const about = settings.about || {};
+    const aboutSection = document.querySelector("#about");
+    if (aboutSection) {
+      const title = aboutSection.querySelector("h2");
+      const texts = aboutSection.querySelectorAll(".cyber-about-text p");
+      if (title && about.title) title.textContent = about.title;
+      if (texts[0] && about.text1) texts[0].textContent = about.text1;
+      if (texts[1] && about.text2) texts[1].textContent = about.text2;
+    }
+  }
+
+  async function loadPublicSiteSettings() {
+    try {
+      const data = await apiJson("/api/site/settings");
+      applySiteSettings(data.settings);
+      window.ACTIVATE_SITE_SETTINGS = data.settings;
+    } catch (e) {
+      // Le site continue de fonctionner avec ses valeurs intégrées si l'API est indisponible.
+      console.warn("[Activate] Paramètres API indisponibles:", e.message);
+    }
+  }
+
+  function openAdminPanel() {
+    let overlay = document.getElementById("activate-admin-overlay");
+    if (!overlay) {
+      document.body.insertAdjacentHTML("beforeend", `
+        <div id="activate-admin-overlay" class="activate-overlay" hidden>
+          <div class="activate-admin-card">
+            <button class="activate-close" id="activate-admin-close" type="button">×</button>
+            <p class="cyber-eyebrow"><span></span> ADMIN ACTIVATE</p>
+            <h2>Administration</h2>
+            <p class="activate-admin-note">Modifie les prix et le texte « À propos ». Les changements sont enregistrés côté serveur.</p>
+            <div id="activate-admin-form"></div>
+            <button id="activate-admin-save" class="activate-main-btn" type="button">Enregistrer</button>
+            <p id="activate-admin-message"></p>
+          </div>
+        </div>`);
+      overlay = document.getElementById("activate-admin-overlay");
+      document.getElementById("activate-admin-close").onclick = () => { overlay.hidden = true; };
+    }
+    const settings = window.ACTIVATE_SITE_SETTINGS || {
+      plans: [
+        { sku: "activate_basic", name: "Standard", monthlyPrice: 20.99, annualPrice: 228 },
+        { sku: "activate_pro", name: "Accès anticipé", monthlyPrice: 42.99, annualPrice: 428 }
+      ],
+      about: { title: "", text1: "", text2: "" }
+    };
+    const form = document.getElementById("activate-admin-form");
+    form.innerHTML = `
+      <h3>Prix des abonnements</h3>
+      ${settings.plans.map((p, i) => `
+        <div class="activate-admin-plan">
+          <input data-admin-plan-name="${i}" value="${escapeHtml(p.name)}" aria-label="Nom ${i + 1}">
+          <input data-admin-monthly="${i}" type="number" min="0" step="0.01" value="${Number(p.monthlyPrice)}" aria-label="Prix mensuel">
+          <input data-admin-annual="${i}" type="number" min="0" step="0.01" value="${Number(p.annualPrice)}" aria-label="Prix annuel">
+        </div>`).join("")}
+      <h3>À propos</h3>
+      <label>Titre<input id="admin-about-title" value="${escapeHtml(settings.about?.title || "")}"></label>
+      <label>Texte 1<textarea id="admin-about-text1">${escapeHtml(settings.about?.text1 || "")}</textarea></label>
+      <label>Texte 2<textarea id="admin-about-text2">${escapeHtml(settings.about?.text2 || "")}</textarea></label>
+    `;
+    const msg = document.getElementById("activate-admin-message");
+    msg.textContent = "";
+    document.getElementById("activate-admin-save").onclick = async () => {
+      const save = document.getElementById("activate-admin-save");
+      save.disabled = true;
+      msg.textContent = "Enregistrement…";
+      try {
+        const next = {
+          plans: settings.plans.map((p, i) => ({
+            sku: p.sku,
+            name: form.querySelector(`[data-admin-plan-name="${i}"]`).value.trim(),
+            monthlyPrice: Number(form.querySelector(`[data-admin-monthly="${i}"]`).value),
+            annualPrice: Number(form.querySelector(`[data-admin-annual="${i}"]`).value)
+          })),
+          about: {
+            title: document.getElementById("admin-about-title").value,
+            text1: document.getElementById("admin-about-text1").value,
+            text2: document.getElementById("admin-about-text2").value
+          }
+        };
+        const result = await apiJson("/api/admin/settings", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ settings: next })
+        });
+        window.ACTIVATE_SITE_SETTINGS = result.settings;
+        applySiteSettings(result.settings);
+        msg.textContent = "✓ Modifications enregistrées.";
+      } catch (e) {
+        msg.textContent = `Erreur : ${e.message}`;
+      } finally { save.disabled = false; }
+    };
+    overlay.hidden = false;
+  }
+
 function setupUI() {
   if (window.ACTIVATE_UI_SETUP_DONE) return;
   const nav = document.querySelector(".cyber-navbar nav");
@@ -419,6 +559,24 @@ function setupUI() {
 
     window.ACTIVATE_CURRENT_USER = user || null;
     window.dispatchEvent(new CustomEvent("activate-auth-changed"));
+
+    // Le bouton Admin n'est affiché que si l'API confirme le custom claim admin.
+    document.getElementById("activate-admin-btn")?.remove();
+    if (user) {
+      try {
+        const adminResult = await apiJson("/api/admin/me");
+        if (adminResult.admin) {
+          const adminBtn = document.createElement("button");
+          adminBtn.id = "activate-admin-btn";
+          adminBtn.className = "activate-nav-btn activate-admin-btn";
+          adminBtn.type = "button";
+          adminBtn.textContent = "⚙ Admin";
+          adminBtn.onclick = openAdminPanel;
+          const nav = document.querySelector(".cyber-navbar nav");
+          nav?.appendChild(adminBtn);
+        }
+      } catch (_) {}
+    }
   });
 
   // Synchronise l'affichage des prix avec le bouton Mensuel / Annuel de la page.
@@ -460,6 +618,7 @@ function setupUI() {
   }
 
   syncActivatePricing();
+  loadPublicSiteSettings();
 
   // Surveille uniquement le sélecteur Mensuel/Annuel au lieu de tout le document.
   // Cela évite une boucle de mutations qui pouvait faire charger la page en continu.

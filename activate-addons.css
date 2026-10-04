@@ -340,3 +340,8 @@
 }
 #activate-google-login.activate-google-btn:hover { filter: brightness(.96); }
 #activate-google-login.activate-google-btn:disabled { opacity: .65; cursor: wait; }
+
+
+/* Administration Activate */
+.activate-admin-card{width:min(760px,94vw);max-height:88vh;overflow:auto;padding:30px;border-radius:18px;background:#0b0b0d;border:1px solid rgba(255,52,41,.35);box-shadow:0 30px 100px rgba(0,0,0,.55);color:#fff;position:relative}
+.activate-admin-card h2{margin:.15rem 0 1rem}.activate-admin-card h3{margin:1.4rem 0 .7rem}.activate-admin-plan{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:10px;margin-bottom:10px}.activate-admin-card input,.activate-admin-card textarea{width:100%;box-sizing:border-box;background:#121216;color:#fff;border:1px solid #333;border-radius:9px;padding:10px;margin-top:5px}.activate-admin-card textarea{min-height:90px;resize:vertical}.activate-admin-card label{display:block;margin:10px 0}.activate-admin-note{opacity:.75}.activate-admin-btn{border-color:rgba(255,52,41,.6)!important;color:#fff!important}.activate-admin-btn:hover{background:rgba(255,52,41,.12)}#activate-admin-message{min-height:1.3em;margin-top:10px}@media(max-width:650px){.activate-admin-plan{grid-template-columns:1fr}.activate-admin-card{padding:22px}}
