@@ -131,7 +131,7 @@ function setupUI() {
   ];
 
   const dashboardData = {
-    href: "https://activate-cyber.github.io/dashboard.html#dashboard",
+    href: "https://activate-cyber.github.io/#dashboard",
     text: "Dashboard"
   };
 
@@ -173,6 +173,52 @@ function setupUI() {
   cartBtn.innerHTML = '🛒 Panier <span id="activate-cart-count">0</span>';
 
   nav.append(linkShell, cartBtn, authBtn);
+
+
+  // Ouvre les pages Dashboard/sections dans une superposition sur la page actuelle.
+  if (!document.getElementById("activate-dashboard-overlay")) {
+    document.body.insertAdjacentHTML("beforeend", `
+      <div id="activate-dashboard-overlay" class="activate-overlay activate-dashboard-overlay" hidden>
+        <div class="activate-dashboard-overlay-card">
+          <button class="activate-close" id="activate-dashboard-overlay-close" type="button">×</button>
+          <iframe id="activate-dashboard-frame" title="Dashboard Activate"></iframe>
+        </div>
+      </div>
+    `);
+  }
+
+  const dashboardOverlay = document.getElementById("activate-dashboard-overlay");
+  const dashboardFrame = document.getElementById("activate-dashboard-frame");
+  const closeDashboard = document.getElementById("activate-dashboard-overlay-close");
+
+  const openDashboardOverlay = (href) => {
+    const url = new URL(href, window.location.origin);
+    const hash = url.hash || "#dashboard";
+    // L'URL visible reste toujours la page principale.
+    history.pushState(null, "", `${window.location.origin}/${hash}`);
+    // Le contenu de dashboard.html s'affiche dans la superposition.
+    dashboardFrame.src = `${window.location.origin}/dashboard.html${hash}`;
+    dashboardOverlay.hidden = false;
+    document.body.classList.add("activate-dashboard-open");
+  };
+
+  closeDashboard.onclick = () => {
+    dashboardOverlay.hidden = true;
+    dashboardFrame.src = "about:blank";
+    document.body.classList.remove("activate-dashboard-open");
+    history.pushState(null, "", `${window.location.origin}/`);
+  };
+
+  dashboardOverlay.addEventListener("click", (event) => {
+    if (event.target === dashboardOverlay) closeDashboard.click();
+  });
+
+  linkShell.querySelectorAll("a").forEach((a) => {
+    a.addEventListener("click", (event) => {
+      event.preventDefault();
+      openDashboardOverlay(a.href);
+    });
+  });
 
   // Auth modal.
   if (!document.getElementById("activate-auth-modal")) {

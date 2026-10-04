@@ -272,3 +272,34 @@
   text-decoration:none !important;
 }
 .activate-contact-link:hover{color:#ff3429 !important}
+
+/* Dashboard/sections : superposition dans la même page, sous la barre de navigation */
+.activate-dashboard-overlay{
+  z-index:9990 !important;
+  align-items:flex-start !important;
+  justify-content:center !important;
+  padding:0 !important;
+}
+.activate-dashboard-overlay-card{
+  position:relative;
+  width:100%;
+  height:100%;
+  background:#050505;
+  overflow:hidden;
+}
+.activate-dashboard-overlay .activate-close{
+  position:absolute;
+  top:14px;
+  right:18px;
+  z-index:9999;
+}
+#activate-dashboard-frame{
+  display:block;
+  width:100%;
+  height:100%;
+  border:0;
+  background:#050505;
+}
+.activate-dashboard-open{
+  overflow:hidden;
+}
