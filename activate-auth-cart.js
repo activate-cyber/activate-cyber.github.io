@@ -102,8 +102,10 @@ function parseEuro(text) {
 }
 
 function setupUI() {
+  if (window.ACTIVATE_UI_SETUP_DONE) return;
   const nav = document.querySelector(".cyber-navbar nav");
   if (!nav) return;
+  window.ACTIVATE_UI_SETUP_DONE = true;
 
   // Supprime les contrôles éventuellement injectés par d'anciennes versions.
   document.querySelectorAll(".cyber-account-button, .cyber-cart-button").forEach(el => el.remove());
@@ -353,10 +355,12 @@ function setupUI() {
 
   let signup = false;
 
-  const openAuth = () => {
+  const openAuth = (message = "") => {
     modal.hidden = false;
-    msg.textContent = "";
+    msg.textContent = message;
+    email.focus();
   };
+  window.ACTIVATE_OPEN_AUTH = openAuth;
 
   authBtn.onclick = openAuth;
   cartBtn.onclick = openCart;
@@ -417,7 +421,94 @@ function setupUI() {
     window.dispatchEvent(new CustomEvent("activate-auth-changed"));
   });
 
-  // Les boutons de chaque formule deviennent des ajouts au panier avec le prix réel.
+  // Synchronise l'affichage des prix avec le bouton Mensuel / Annuel de la page.
+  // En annuel, le gros prix est le montant réellement facturé en une fois.
+  function syncActivatePricing() {
+    const annualToggle = document.querySelector('.cyber-billing-switch button[aria-pressed="true"]');
+    const isAnnual = !!document.querySelector('.cyber-billing-switch button.is-active') && document.querySelector('.cyber-billing-switch button.is-active')?.textContent?.trim().toLowerCase() === "annuel";
+    const plans = Array.from(document.querySelectorAll(".cyber-plan"));
+    const annualPrices = [228, 428];
+
+    plans.forEach((card, index) => {
+      const priceStrong = card.querySelector(".cyber-plan-price strong");
+      const pricePeriod = card.querySelector(".cyber-plan-price span");
+      const action = card.querySelector(".cyber-plan-action");
+      if (!priceStrong || !pricePeriod) return;
+
+      if (!card.dataset.activateMonthlyPrice) {
+        const monthlyButtonPrice = parseEuro(action?.textContent || "");
+        card.dataset.activateMonthlyPrice = String(monthlyButtonPrice || parseEuro(priceStrong.textContent || ""));
+      }
+
+      const monthlyPrice = Number(card.dataset.activateMonthlyPrice);
+      const annualPrice = annualPrices[index];
+
+      if (isAnnual && annualPrice) {
+        priceStrong.textContent = formatEUR(annualPrice);
+        pricePeriod.textContent = "/ an";
+        const billing = card.querySelector(".cyber-plan-billing");
+        if (billing) billing.textContent = "Facturé en une fois";
+        if (action) action.textContent = `Ajouter au panier — ${formatEUR(annualPrice)}`;
+      } else if (monthlyPrice) {
+        priceStrong.textContent = formatEUR(monthlyPrice);
+        pricePeriod.textContent = "/ mois";
+        const billing = card.querySelector(".cyber-plan-billing");
+        if (billing) billing.textContent = "Facturé mensuellement";
+        if (action) action.textContent = `Ajouter au panier — ${formatEUR(monthlyPrice)}`;
+      }
+    });
+  }
+
+  syncActivatePricing();
+
+  // Surveille uniquement le sélecteur Mensuel/Annuel au lieu de tout le document.
+  // Cela évite une boucle de mutations qui pouvait faire charger la page en continu.
+  const billingSwitch = document.querySelector('.cyber-billing-switch');
+  if (billingSwitch && !billingSwitch.dataset.activatePricingObserver) {
+    billingSwitch.dataset.activatePricingObserver = "1";
+    const pricingObserver = new MutationObserver(() => syncActivatePricing());
+    pricingObserver.observe(billingSwitch, { childList: true, subtree: true, attributes: true, attributeFilter: ["aria-pressed", "class"] });
+  }
+
+  document.addEventListener("click", (event) => {
+    if (event.target.closest?.(".cyber-billing-switch")) {
+      setTimeout(syncActivatePricing, 0);
+    }
+  });
+
+  // Interception globale en phase capture : elle bloque aussi le handler React
+  // du site original, afin qu'un abonnement ne puisse jamais être ajouté sans compte.
+  if (!window.ACTIVATE_PLAN_CAPTURE_BOUND) {
+    window.ACTIVATE_PLAN_CAPTURE_BOUND = true;
+    document.addEventListener("click", (event) => {
+      const button = event.target.closest?.(".cyber-plan-action");
+      if (!button) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+
+      if (!auth.currentUser) {
+        window.ACTIVATE_OPEN_AUTH?.("Connecte-toi ou crée un compte avant d'ajouter une formule au panier.");
+        return;
+      }
+
+      const card = button.closest(".cyber-plan, .cyber-school-plan");
+      if (!card) return;
+      const name = card.querySelector(".cyber-plan-name, .cyber-school-plan h4")?.textContent?.trim() || "Abonnement Activate";
+      const annual = document.querySelector(".cyber-billing-switch button.is-active")?.textContent?.trim().toLowerCase() === "annuel";
+      const planIndex = Array.from(document.querySelectorAll(".cyber-plan")).indexOf(card);
+      const price = annual && [228,428][planIndex] ? [228,428][planIndex] : parseEuro(button.textContent) || parseEuro(card.querySelector(".cyber-plan-price strong")?.textContent);
+      const period = annual ? "annuel" : "mensuel";
+      if (!price) return;
+      const items = cart();
+      if (!items.some(x => x.name === name && x.period === period)) items.push({name, price, period});
+      saveCart(items);
+      openCart();
+    }, true);
+  }
+
+  // Les boutons de chaque formule deviennent des ajouts au panier.
+  // Le prix et la période sont lus AU MOMENT du clic afin que le mode
+  // Mensuel / Annuel utilise toujours le bon montant.
   document.querySelectorAll(".cyber-plan-action").forEach((button) => {
     if (button.dataset.activatePaymentBound === "1") return;
     button.dataset.activatePaymentBound = "1";
@@ -429,28 +520,40 @@ function setupUI() {
       card.querySelector(".cyber-plan-name, .cyber-school-plan h4")?.textContent?.trim() ||
       "Abonnement Activate";
 
-    const billing = card.querySelector(".cyber-plan-billing")?.textContent || "";
-    let price = parseEuro(billing);
-
-    if (!price) {
-      const priceNode =
-        card.querySelector(".cyber-plan-price strong, .cyber-school-price strong");
-      price = parseEuro(priceNode?.textContent);
-    }
-
-    const period =
-      billing.includes("an") && !billing.includes("mois")
-        ? "annuel"
-        : "mensuel";
-
     button.href = "#";
     button.removeAttribute("target");
-    button.textContent = `Ajouter au panier — ${formatEUR(price)}`;
+
     button.addEventListener("click", (event) => {
       event.preventDefault();
 
+      // Un compte est obligatoire avant de pouvoir ajouter un article au panier.
+      if (!auth.currentUser) {
+        openAuth("Connecte-toi ou crée un compte pour ajouter une formule au panier.");
+        return;
+      }
+
+      const annualToggle = document.querySelector('.cyber-billing-switch button[aria-pressed="true"]');
+      const isAnnual = !!document.querySelector('.cyber-billing-switch button.is-active') && document.querySelector('.cyber-billing-switch button.is-active')?.textContent?.trim().toLowerCase() === "annuel";
+      const annualPrices = [228, 428];
+      const planIndex = Array.from(document.querySelectorAll(".cyber-plan")).indexOf(card);
+
+      let price;
+      let period;
+
+      if (isAnnual && annualPrices[planIndex]) {
+        price = annualPrices[planIndex];
+        period = "annuel";
+      } else {
+        price = parseEuro(card.querySelector(".cyber-plan-price strong")?.textContent);
+        period = "mensuel";
+      }
+
+      if (!price) return;
+
+      button.textContent = `Ajouter au panier — ${formatEUR(price)}`;
+
       const items = cart();
-      if (!items.some(x => x.name === name && Number(x.price) === Number(price))) {
+      if (!items.some(x => x.name === name && x.period === period)) {
         items.push({ name, price: Number(price), period });
         saveCart(items);
       }
@@ -552,5 +655,4 @@ window.addEventListener("activate-auth-changed", renderDashboardIfPresent);
 window.addEventListener("storage", renderDashboardIfPresent);
 window.addEventListener("hashchange", renderDashboardIfPresent);
 
-waitForApp(setupUI);
 waitForApp(setupUI);
