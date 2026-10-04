@@ -102,10 +102,8 @@ function parseEuro(text) {
 }
 
 function setupUI() {
-  if (window.ACTIVATE_UI_SETUP_DONE) return;
   const nav = document.querySelector(".cyber-navbar nav");
   if (!nav) return;
-  window.ACTIVATE_UI_SETUP_DONE = true;
 
   // Supprime les contrôles éventuellement injectés par d'anciennes versions.
   document.querySelectorAll(".cyber-account-button, .cyber-cart-button").forEach(el => el.remove());
@@ -460,21 +458,9 @@ function setupUI() {
   }
 
   syncActivatePricing();
-
-  // Surveille uniquement le sélecteur Mensuel/Annuel au lieu de tout le document.
-  // Cela évite une boucle de mutations qui pouvait faire charger la page en continu.
-  const billingSwitch = document.querySelector('.cyber-billing-switch');
-  if (billingSwitch && !billingSwitch.dataset.activatePricingObserver) {
-    billingSwitch.dataset.activatePricingObserver = "1";
-    const pricingObserver = new MutationObserver(() => syncActivatePricing());
-    pricingObserver.observe(billingSwitch, { childList: true, subtree: true, attributes: true, attributeFilter: ["aria-pressed", "class"] });
-  }
-
-  document.addEventListener("click", (event) => {
-    if (event.target.closest?.(".cyber-billing-switch")) {
-      setTimeout(syncActivatePricing, 0);
-    }
-  });
+  const pricingObserver = new MutationObserver(() => syncActivatePricing());
+  pricingObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["aria-pressed", "class"] });
+  setInterval(syncActivatePricing, 250);
 
   // Interception globale en phase capture : elle bloque aussi le handler React
   // du site original, afin qu'un abonnement ne puisse jamais être ajouté sans compte.
@@ -655,4 +641,5 @@ window.addEventListener("activate-auth-changed", renderDashboardIfPresent);
 window.addEventListener("storage", renderDashboardIfPresent);
 window.addEventListener("hashchange", renderDashboardIfPresent);
 
+waitForApp(setupUI);
 waitForApp(setupUI);
