@@ -124,19 +124,16 @@ function setupUI() {
   };
 
   const wanted = [
-    getLink("#services", "Services"),
-    getLink("#about", "À propos"),
-    getLink("#subscriptions", "Abonnements"),
-    getLink("#school-subscriptions", "Tarifs écoles")
+    {href:"https://activate-cyber.github.io/dashboard.html#services", text:"Services"},
+    {href:"https://activate-cyber.github.io/dashboard.html#about", text:"À propos"},
+    {href:"https://activate-cyber.github.io/dashboard.html#subscriptions", text:"Abonnements"},
+    {href:"https://activate-cyber.github.io/dashboard.html#school-subscriptions", text:"Tarifs écoles"}
   ];
 
   const dashboardData = {
-    href: "https://activate-cyber.github.io/#dashboard",
+    href: "https://activate-cyber.github.io/dashboard.html#dashboard",
     text: "Dashboard"
   };
-  const contactData =
-    linkData.find(x => x.href.startsWith("mailto:")) ||
-    {href:"mailto:activate.cyber@gmail.com", text:"Nous contacter"};
 
   // Nettoyage complet de la nav : les contrôles seront recréés juste après.
   nav.innerHTML = "";
@@ -155,12 +152,6 @@ function setupUI() {
   dashboard.href = dashboardData.href;
   dashboard.textContent = dashboardData.text;
   linkShell.appendChild(dashboard);
-
-  // Contact reste volontairement hors du cadre.
-  const contact = document.createElement("a");
-  contact.href = contactData.href;
-  contact.textContent = contactData.text;
-  contact.className = "activate-contact-link";
 
   let authBtn = document.getElementById("activate-login-btn");
   if (!authBtn) {
@@ -181,7 +172,7 @@ function setupUI() {
   }
   cartBtn.innerHTML = '🛒 Panier <span id="activate-cart-count">0</span>';
 
-  nav.append(linkShell, contact, cartBtn, authBtn);
+  nav.append(linkShell, cartBtn, authBtn);
 
   // Auth modal.
   if (!document.getElementById("activate-auth-modal")) {
@@ -404,55 +395,3 @@ window.addEventListener("hashchange", renderDashboardIfPresent);
 
 waitForApp(setupUI);
 waitForApp(setupUI);
-
-
-(function activateRequestedNavigation(){
-  function apply(){
-    const nav=document.querySelector(".cyber-navbar nav");
-    if(!nav || nav.dataset.activateNavFixed==="1") return;
-    nav.dataset.activateNavFixed="1";
-
-    nav.querySelectorAll(".activate-nav-links,#activate-login-btn,#activate-cart-btn").forEach(e=>e.remove());
-
-    const shell=document.createElement("div");
-    shell.className="activate-nav-links";
-    [
-      ["Services","https://activate-cyber.github.io/#services"],
-      ["À propos","https://activate-cyber.github.io/#about"],
-      ["Abonnements","https://activate-cyber.github.io/#subscriptions"],
-      ["Tarifs écoles","https://activate-cyber.github.io/#school-subscriptions"],
-      ["Dashboard","https://activate-cyber.github.io/#dashboard"]
-    ].forEach(([t,h])=>{
-      const a=document.createElement("a");
-      a.href=h; a.textContent=t; shell.appendChild(a);
-    });
-
-    const contact=document.createElement("a");
-    contact.href="mailto:activate.cyber@gmail.com";
-    contact.textContent="Contact";
-    contact.className="activate-contact-link";
-
-    const cart=document.createElement("button");
-    cart.id="activate-cart-btn";
-    cart.className="activate-nav-btn activate-cart-btn";
-    cart.type="button";
-    cart.innerHTML='🛒 Panier <span id="activate-cart-count">0</span>';
-
-    const login=document.createElement("button");
-    login.id="activate-login-btn";
-    login.className="activate-nav-btn activate-auth-btn";
-    login.type="button";
-    login.textContent="Connexion";
-
-    nav.append(shell,contact,cart,login);
-
-    // Reconnecte les fonctions déjà présentes dans le fichier.
-    if(typeof openCart==="function") cart.onclick=openCart;
-    if(typeof updateCartBadge==="function") updateCartBadge();
-    if(typeof setupAuthButton==="function") setupAuthButton(login);
-  }
-  const obs=new MutationObserver(apply);
-  obs.observe(document.body,{childList:true,subtree:true});
-  setTimeout(apply,500);
-  setTimeout(apply,1500);
-})();
