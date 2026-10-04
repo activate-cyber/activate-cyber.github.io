@@ -1,0 +1,4 @@
+Activate — site statique
+
+Le dossier contient la version compilée du site et peut être déployé sur un hébergement statique.
+Publiez le contenu de ce dossier à la racine du site.
