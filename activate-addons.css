@@ -261,3 +261,14 @@
   .activate-cart-btn{order:3}
   .activate-auth-btn{order:4}
 }
+
+.activate-contact-link{
+  margin-left:8px !important;
+  padding:8px 4px !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  color:inherit !important;
+  text-decoration:none !important;
+}
+.activate-contact-link:hover{color:#ff3429 !important}

@@ -60,7 +60,7 @@ function openCart() {
             <p class="activate-cart-note">Le paiement s’ouvre sur PayPal avec le montant affiché.</p>`
           : `<p>Ton panier est vide.</p>`
       }
-      <a class="activate-dashboard-back" href="dashboard.html">Ouvrir le Dashboard</a>
+      <a class="activate-dashboard-back" href="https://activate-cyber.github.io/#dashboard">Ouvrir le Dashboard</a>
     </div>
   `;
 
@@ -365,3 +365,55 @@ window.addEventListener("storage", renderDashboardIfPresent);
 
 waitForApp(setupUI);
 waitForApp(setupUI);
+
+
+(function activateRequestedNavigation(){
+  function apply(){
+    const nav=document.querySelector(".cyber-navbar nav");
+    if(!nav || nav.dataset.activateNavFixed==="1") return;
+    nav.dataset.activateNavFixed="1";
+
+    nav.querySelectorAll(".activate-nav-links,#activate-login-btn,#activate-cart-btn").forEach(e=>e.remove());
+
+    const shell=document.createElement("div");
+    shell.className="activate-nav-links";
+    [
+      ["Services","dashboard.html#services"],
+      ["À propos","dashboard.html#about"],
+      ["Abonnements","dashboard.html#subscriptions"],
+      ["Tarifs écoles","dashboard.html#school-subscriptions"],
+      ["Dashboard","https://activate-cyber.github.io/#dashboard"]
+    ].forEach(([t,h])=>{
+      const a=document.createElement("a");
+      a.href=h; a.textContent=t; shell.appendChild(a);
+    });
+
+    const contact=document.createElement("a");
+    contact.href="mailto:activate.cyber@gmail.com";
+    contact.textContent="Contact";
+    contact.className="activate-contact-link";
+
+    const cart=document.createElement("button");
+    cart.id="activate-cart-btn";
+    cart.className="activate-nav-btn activate-cart-btn";
+    cart.type="button";
+    cart.innerHTML='🛒 Panier <span id="activate-cart-count">0</span>';
+
+    const login=document.createElement("button");
+    login.id="activate-login-btn";
+    login.className="activate-nav-btn activate-auth-btn";
+    login.type="button";
+    login.textContent="Connexion";
+
+    nav.append(shell,contact,cart,login);
+
+    // Reconnecte les fonctions déjà présentes dans le fichier.
+    if(typeof openCart==="function") cart.onclick=openCart;
+    if(typeof updateCartBadge==="function") updateCartBadge();
+    if(typeof setupAuthButton==="function") setupAuthButton(login);
+  }
+  const obs=new MutationObserver(apply);
+  obs.observe(document.body,{childList:true,subtree:true});
+  setTimeout(apply,500);
+  setTimeout(apply,1500);
+})();
