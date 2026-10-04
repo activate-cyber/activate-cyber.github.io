@@ -42,31 +42,47 @@ function setupUI() {
   const nav = document.querySelector(".cyber-navbar nav");
   if (!nav) return;
 
-  // Nettoyage d'anciens boutons éventuels pour éviter les doublons.
-  document.querySelectorAll("#activate-login-btn").forEach((el, i) => {
-    if (i > 0) el.remove();
-  });
-  document.querySelectorAll("#activate-cart-btn").forEach((el, i) => {
-    if (i > 0) el.remove();
+  // Le bundle original contient déjà ses propres contrôles Connexion/Panier.
+  // On les retire visuellement pour ne garder que les nouveaux contrôles.
+  document.querySelectorAll(".cyber-account-button, .cyber-cart-button").forEach((el) => {
+    el.remove();
   });
 
-  // Encadre uniquement les liens de navigation existants.
+  // Nettoie d'éventuels anciens contrôles ajoutés par une version précédente.
+  document.querySelectorAll('[data-activate-old-control="true"]').forEach((el) => el.remove());
+
+  // Encadre les cinq liens de navigation existants.
   let linkShell = nav.querySelector(".activate-nav-links");
   if (!linkShell) {
     linkShell = document.createElement("div");
     linkShell.className = "activate-nav-links";
 
     Array.from(nav.children).forEach((child) => {
-      if (!child.id?.startsWith("activate-")) linkShell.appendChild(child);
+      if (
+        child !== linkShell &&
+        !child.id?.startsWith("activate-") &&
+        !child.dataset?.activateControl
+      ) {
+        linkShell.appendChild(child);
+      }
     });
 
     nav.prepend(linkShell);
   }
 
+  // Si une ancienne version a laissé des doublons dans le cadre, garde un seul exemplaire de chaque lien.
+  const seenHrefs = new Set();
+  Array.from(linkShell.querySelectorAll("a")).forEach((a) => {
+    const href = a.getAttribute("href") || "";
+    if (seenHrefs.has(href)) a.remove();
+    else seenHrefs.add(href);
+  });
+
   let authBtn = document.getElementById("activate-login-btn");
   if (!authBtn) {
     authBtn = document.createElement("button");
     authBtn.id = "activate-login-btn";
+    authBtn.dataset.activateControl = "auth";
     authBtn.className = "activate-nav-btn activate-auth-btn";
     authBtn.type = "button";
     authBtn.textContent = "Connexion";
@@ -76,12 +92,13 @@ function setupUI() {
   if (!cartBtn) {
     cartBtn = document.createElement("button");
     cartBtn.id = "activate-cart-btn";
+    cartBtn.dataset.activateControl = "cart";
     cartBtn.className = "activate-nav-btn activate-cart-btn";
     cartBtn.type = "button";
     cartBtn.innerHTML = '🛒 Panier <span id="activate-cart-count">0</span>';
   }
 
-  // Toujours dans cet ordre : navigation encadrée, panier, connexion tout à droite.
+  // Ordre fixe : cadre de navigation -> panier -> connexion tout à droite.
   nav.append(linkShell, cartBtn, authBtn);
 
   if (!document.getElementById("activate-auth-modal")) {
@@ -89,12 +106,12 @@ function setupUI() {
       "beforeend",
       `<div id="activate-auth-modal" class="activate-overlay" hidden>
         <div class="activate-modal-card">
-          <button class="activate-close" data-close-auth>×</button>
+          <button class="activate-close" data-close-auth type="button">×</button>
           <h2 id="activate-auth-title">Connexion</h2>
-          <input id="activate-email" type="email" placeholder="Adresse e-mail">
-          <input id="activate-password" type="password" placeholder="Mot de passe">
-          <button id="activate-auth-submit" class="activate-main-btn">Se connecter</button>
-          <button id="activate-auth-switch" class="activate-link-btn">Créer un compte</button>
+          <input id="activate-email" type="email" placeholder="Adresse e-mail" autocomplete="email">
+          <input id="activate-password" type="password" placeholder="Mot de passe" autocomplete="current-password">
+          <button id="activate-auth-submit" class="activate-main-btn" type="button">Se connecter</button>
+          <button id="activate-auth-switch" class="activate-link-btn" type="button">Créer un compte</button>
           <p id="activate-auth-message"></p>
         </div>
       </div>`
@@ -117,10 +134,10 @@ function setupUI() {
 
   let signup = false;
 
-  function openAuth() {
+  const openAuth = () => {
     modal.hidden = false;
     msg.textContent = "";
-  }
+  };
 
   authBtn.onclick = openAuth;
   cartBtn.onclick = openCart;
@@ -135,20 +152,20 @@ function setupUI() {
       signup ? "Créer un compte" : "Connexion";
     submit.textContent = signup ? "Créer le compte" : "Se connecter";
     sw.textContent = signup ? "J’ai déjà un compte" : "Créer un compte";
+    password.autocomplete = signup ? "new-password" : "current-password";
   };
 
   submit.onclick = async () => {
     msg.textContent = "";
     try {
       if (signup) {
-        await createUserWithEmailAndPassword(auth, email.value, password.value);
+        await createUserWithEmailAndPassword(auth, email.value.trim(), password.value);
       } else {
-        await signInWithEmailAndPassword(auth, email.value, password.value);
+        await signInWithEmailAndPassword(auth, email.value.trim(), password.value);
       }
       modal.hidden = true;
     } catch (e) {
-      msg.textContent =
-        e.code?.replace("auth/", "") || "Une erreur est survenue.";
+      msg.textContent = e.code?.replace("auth/", "") || "Une erreur est survenue.";
     }
   };
 
@@ -166,25 +183,37 @@ function setupUI() {
     }
   });
 
-  document.querySelectorAll(".cyber-plan").forEach((card) => {
-    const name = card.querySelector(".cyber-plan-name")?.textContent?.trim();
-    const price = card
-      .querySelector(".cyber-plan-price strong")
-      ?.textContent?.replace("€", "")
-      .replace(",", ".")
-      .trim();
+  // Les boutons "Ajouter au panier" du site original alimentent maintenant
+  // le même panier local que le nouveau bouton Panier.
+  document.querySelectorAll(".cyber-cart-add").forEach((button) => {
+    if (button.dataset.activateCartBound === "1") return;
+    button.dataset.activateCartBound = "1";
 
-    if (!name || card.querySelector("[data-add-cart]")) return;
+    button.addEventListener("click", () => {
+      const card = button.closest(".cyber-plan, .cyber-school-plan");
+      if (!card) return;
 
-    const b = document.createElement("button");
-    b.className = "activate-add-cart";
-    b.dataset.addCart = "1";
-    b.type = "button";
-    b.textContent = "Ajouter au panier";
-    b.onclick = () => addToCart(name, price);
-    card.querySelector(".cyber-plan-action")?.insertAdjacentElement("afterend", b);
+      const name =
+        card.querySelector(".cyber-plan-name, h4")?.textContent?.trim() ||
+        "Abonnement Activate";
+
+      const priceText =
+        card.querySelector(".cyber-plan-price strong, .cyber-school-price strong")
+          ?.textContent || "0";
+
+      const price = Number(
+        priceText.replace(/[^\d,.-]/g, "").replace(",", ".")
+      );
+
+      const items = cart();
+      if (!items.some((x) => x.name === name)) {
+        items.push({ name, price: Number.isFinite(price) ? price : 0 });
+        saveCart(items);
+      }
+    });
   });
 
   updateCartBadge();
 }
+
 waitForApp(setupUI);
