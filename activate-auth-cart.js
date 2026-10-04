@@ -353,9 +353,9 @@ function setupUI() {
 
   let signup = false;
 
-  const openAuth = (message = "") => {
+  const openAuth = () => {
     modal.hidden = false;
-    msg.textContent = message;
+    msg.textContent = "";
   };
 
   authBtn.onclick = openAuth;
@@ -455,9 +455,7 @@ function setupUI() {
   const pricingObserver = new MutationObserver(() => syncActivatePricing());
   pricingObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["aria-pressed", "class"] });
 
-  // Les boutons de chaque formule deviennent des ajouts au panier.
-  // Le prix et la période sont lus AU MOMENT du clic afin que le mode
-  // Mensuel / Annuel utilise toujours le bon montant.
+  // Les boutons de chaque formule deviennent des ajouts au panier avec le prix réel.
   document.querySelectorAll(".cyber-plan-action").forEach((button) => {
     if (button.dataset.activatePaymentBound === "1") return;
     button.dataset.activatePaymentBound = "1";
@@ -469,40 +467,28 @@ function setupUI() {
       card.querySelector(".cyber-plan-name, .cyber-school-plan h4")?.textContent?.trim() ||
       "Abonnement Activate";
 
+    const billing = card.querySelector(".cyber-plan-billing")?.textContent || "";
+    let price = parseEuro(billing);
+
+    if (!price) {
+      const priceNode =
+        card.querySelector(".cyber-plan-price strong, .cyber-school-price strong");
+      price = parseEuro(priceNode?.textContent);
+    }
+
+    const period =
+      billing.includes("an") && !billing.includes("mois")
+        ? "annuel"
+        : "mensuel";
+
     button.href = "#";
     button.removeAttribute("target");
-
+    button.textContent = `Ajouter au panier — ${formatEUR(price)}`;
     button.addEventListener("click", (event) => {
       event.preventDefault();
 
-      // Un compte est obligatoire avant de pouvoir ajouter un article au panier.
-      if (!auth.currentUser) {
-        openAuth("Connecte-toi ou crée un compte pour ajouter une formule au panier.");
-        return;
-      }
-
-      const annualToggle = document.querySelector('.cyber-billing-switch button[aria-pressed="true"]');
-      const isAnnual = annualToggle?.textContent?.trim().toLowerCase() === "annuel";
-      const annualPrices = [228, 428];
-      const planIndex = Array.from(document.querySelectorAll(".cyber-plan")).indexOf(card);
-
-      let price;
-      let period;
-
-      if (isAnnual && annualPrices[planIndex]) {
-        price = annualPrices[planIndex];
-        period = "annuel";
-      } else {
-        price = parseEuro(card.querySelector(".cyber-plan-price strong")?.textContent);
-        period = "mensuel";
-      }
-
-      if (!price) return;
-
-      button.textContent = `Ajouter au panier — ${formatEUR(price)}`;
-
       const items = cart();
-      if (!items.some(x => x.name === name && x.period === period)) {
+      if (!items.some(x => x.name === name && Number(x.price) === Number(price))) {
         items.push({ name, price: Number(price), period });
         saveCart(items);
       }
