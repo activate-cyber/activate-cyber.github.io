@@ -5,7 +5,6 @@ const config = window.ACTIVATE_FIREBASE_CONFIG;
 
 // API Activate
 window.ACTIVATE_API_URL = "https://salon-railroad-third-conferencing.trycloudflare.com";
-
 if (!config) throw new Error("Configuration Firebase Activate introuvable.");
 
 const app = getApps().length ? getApps()[0] : initializeApp(config);
@@ -106,162 +105,149 @@ function parseEuro(text) {
 }
 
 
-async function getActivateApiUrl() {
-  return String(window.ACTIVATE_API_URL || "").replace(/\/$/, "");
-}
+  async function getActivateApiUrl() {
+    return String(window.ACTIVATE_API_URL || "").replace(/\/$/, "");
+  }
 
-async function apiJson(path, options = {}) {
-  const base = await getActivateApiUrl();
-  if (!base) throw new Error("API Activate non configurée.");
-  const headers = { ...(options.headers || {}) };
-  const user = auth.currentUser;
-  if (user) headers.Authorization = `Bearer ${await user.getIdToken()}`;
-  const response = await fetch(`${base}${path}`, { ...options, headers });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || `API HTTP ${response.status}`);
-  return data;
-}
+  async function apiJson(path, options = {}) {
+    const base = await getActivateApiUrl();
+    if (!base) throw new Error("API Activate non configurée.");
+    const headers = { ...(options.headers || {}) };
+    const user = auth.currentUser;
+    if (user) headers.Authorization = `Bearer ${await user.getIdToken()}`;
+    const response = await fetch(`${base}${path}`, { ...options, headers });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `API HTTP ${response.status}`);
+    return data;
+  }
 
-function applySiteSettings(settings) {
-  if (!settings) return;
-  const plans = Array.isArray(settings.plans) ? settings.plans : [];
-  const cards = Array.from(document.querySelectorAll(".cyber-plan"));
-  cards.forEach((card, index) => {
-    const p = plans[index];
-    if (!p) return;
-    const name = card.querySelector(".cyber-plan-name");
-    const monthly = card.querySelector(".cyber-plan-price strong");
-    if (name) name.textContent = p.name;
-    if (monthly) {
-      card.dataset.activateMonthlyPrice = String(Number(p.monthlyPrice));
+  function applySiteSettings(settings) {
+    if (!settings) return;
+    const plans = Array.isArray(settings.plans) ? settings.plans : [];
+    const cards = Array.from(document.querySelectorAll(".cyber-plan"));
+    cards.forEach((card, index) => {
+      const p = plans[index];
+      if (!p) return;
+      const name = card.querySelector(".cyber-plan-name");
+      const monthly = card.querySelector(".cyber-plan-price strong");
+      if (name) name.textContent = p.name;
+      if (monthly) {
+        card.dataset.activateMonthlyPrice = String(Number(p.monthlyPrice));
+      }
+      const active = document.querySelector('.cyber-billing-switch button.is-active, .cyber-billing-switch button[aria-pressed="true"]');
+      if (active?.textContent?.trim().toLowerCase() === "annuel") {
+        if (monthly) monthly.textContent = formatEUR(p.annualPrice);
+        const period = card.querySelector(".cyber-plan-price span");
+        if (period) period.textContent = "/ an";
+      } else if (monthly) {
+        monthly.textContent = formatEUR(p.monthlyPrice);
+        const period = card.querySelector(".cyber-plan-price span");
+        if (period) period.textContent = "/ mois";
+      }
+      const action = card.querySelector(".cyber-plan-action");
+      if (action) action.textContent = `Ajouter au panier — ${formatEUR(active?.textContent?.trim().toLowerCase() === "annuel" ? p.annualPrice : p.monthlyPrice)}`;
+    });
+
+    const about = settings.about || {};
+    const aboutSection = document.querySelector("#about");
+    if (aboutSection) {
+      const title = aboutSection.querySelector("h2");
+      const texts = aboutSection.querySelectorAll(".cyber-about-text p");
+      if (title && about.title) title.textContent = about.title;
+      if (texts[0] && about.text1) texts[0].textContent = about.text1;
+      if (texts[1] && about.text2) texts[1].textContent = about.text2;
     }
-    const active = document.querySelector('.cyber-billing-switch button.is-active, .cyber-billing-switch button[aria-pressed="true"]');
-    if (active?.textContent?.trim().toLowerCase() === "annuel") {
-      if (monthly) monthly.textContent = formatEUR(p.annualPrice);
-      const period = card.querySelector(".cyber-plan-price span");
-      if (period) period.textContent = "/ an";
-    } else if (monthly) {
-      monthly.textContent = formatEUR(p.monthlyPrice);
-      const period = card.querySelector(".cyber-plan-price span");
-      if (period) period.textContent = "/ mois";
-    }
-    const action = card.querySelector(".cyber-plan-action");
-    if (action) action.textContent = `Ajouter au panier — ${formatEUR(active?.textContent?.trim().toLowerCase() === "annuel" ? p.annualPrice : p.monthlyPrice)}`;
-  });
-
-  const about = settings.about || {};
-  const aboutSection = document.querySelector("#about");
-  if (aboutSection) {
-    const title = aboutSection.querySelector("h2");
-    const texts = aboutSection.querySelectorAll(".cyber-about-text p");
-    if (title && about.title) title.textContent = about.title;
-    if (texts[0] && about.text1) texts[0].textContent = about.text1;
-    if (texts[1] && about.text2) texts[1].textContent = about.text2;
-  }
-}
-
-async function loadPublicSiteSettings() {
-  try {
-    const data = await apiJson("/api/site/settings");
-    applySiteSettings(data.settings);
-    window.ACTIVATE_SITE_SETTINGS = data.settings;
-  } catch (e) {
-    // Le site continue de fonctionner avec ses valeurs intégrées si l'API est indisponible.
-    console.warn("[Activate] Paramètres API indisponibles:", e.message);
-  }
-}
-
-function openAdminPanel() {
-  let overlay = document.getElementById("activate-admin-overlay");
-  if (!overlay) {
-    document.body.insertAdjacentHTML("beforeend", `
-      <div id="activate-admin-overlay" class="activate-overlay" hidden>
-        <div class="activate-admin-card">
-          <button class="activate-close" id="activate-admin-close" type="button">×</button>
-          <p class="cyber-eyebrow"><span></span> ADMIN ACTIVATE</p>
-          <h2>Administration</h2>
-          <p class="activate-admin-note">Modifie les prix et le texte « À propos ». Les changements sont enregistrés côté serveur.</p>
-          <div id="activate-admin-form"></div>
-          <button id="activate-admin-save" class="activate-main-btn" type="button">Enregistrer</button>
-          <p id="activate-admin-message"></p>
-        </div>
-      </div>`);
-    overlay = document.getElementById("activate-admin-overlay");
-    document.getElementById("activate-admin-close").onclick = () => { overlay.hidden = true; };
   }
 
-  const settings = window.ACTIVATE_SITE_SETTINGS || {
-    plans: [
-      { sku: "activate_basic", name: "Standard", monthlyPrice: 20.99, annualPrice: 228 },
-      { sku: "activate_pro", name: "Accès anticipé", monthlyPrice: 42.99, annualPrice: 428 }
-    ],
-    about: { title: "", text1: "", text2: "" }
-  };
-
-  const form = document.getElementById("activate-admin-form");
-
-  form.innerHTML = `
-    <h3>Prix des abonnements</h3>
-    ${settings.plans.map((p, i) => `
-      <div class="activate-admin-plan">
-        <input data-admin-plan-name="${i}" value="${escapeHtml(p.name)}" aria-label="Nom ${i + 1}">
-        <input data-admin-monthly="${i}" type="number" min="0" step="0.01" value="${Number(p.monthlyPrice)}" aria-label="Prix mensuel">
-        <input data-admin-annual="${i}" type="number" min="0" step="0.01" value="${Number(p.annualPrice)}" aria-label="Prix annuel">
-      </div>`).join("")}
-    <h3>À propos</h3>
-    <label>Titre<input id="admin-about-title" value="${escapeHtml(settings.about?.title || "")}"></label>
-    <label>Texte 1<textarea id="admin-about-text1">${escapeHtml(settings.about?.text1 || "")}</textarea></label>
-    <label>Texte 2<textarea id="admin-about-text2">${escapeHtml(settings.about?.text2 || "")}</textarea></label>
-  `;
-
-  const msg = document.getElementById("activate-admin-message");
-  msg.textContent = "";
-
-  document.getElementById("activate-admin-save").onclick = async () => {
-    const save = document.getElementById("activate-admin-save");
-    save.disabled = true;
-    msg.textContent = "Enregistrement…";
-
+  async function loadPublicSiteSettings() {
     try {
-      const next = {
-        plans: settings.plans.map((p, i) => ({
-          sku: p.sku,
-          name: form.querySelector(`[data-admin-plan-name="${i}"]`).value.trim(),
-          monthlyPrice: Number(form.querySelector(`[data-admin-monthly="${i}"]`).value),
-          annualPrice: Number(form.querySelector(`[data-admin-annual="${i}"]`).value)
-        })),
-        about: {
-          title: document.getElementById("admin-about-title").value,
-          text1: document.getElementById("admin-about-text1").value,
-          text2: document.getElementById("admin-about-text2").value
-        }
-      };
-
-      const result = await apiJson("/api/admin/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ settings: next })
-      });
-
-      window.ACTIVATE_SITE_SETTINGS = result.settings;
-      applySiteSettings(result.settings);
-      msg.textContent = "✓ Modifications enregistrées.";
+      const data = await apiJson("/api/site/settings");
+      applySiteSettings(data.settings);
+      window.ACTIVATE_SITE_SETTINGS = data.settings;
     } catch (e) {
-      msg.textContent = `Erreur : ${e.message}`;
-    } finally {
-      save.disabled = false;
+      // Le site continue de fonctionner avec ses valeurs intégrées si l'API est indisponible.
+      console.warn("[Activate] Paramètres API indisponibles:", e.message);
     }
-  };
+  }
 
-  overlay.hidden = false;
-}
+  function openAdminPanel() {
+    let overlay = document.getElementById("activate-admin-overlay");
+    if (!overlay) {
+      document.body.insertAdjacentHTML("beforeend", `
+        <div id="activate-admin-overlay" class="activate-overlay" hidden>
+          <div class="activate-admin-card">
+            <button class="activate-close" id="activate-admin-close" type="button">×</button>
+            <p class="cyber-eyebrow"><span></span> ADMIN ACTIVATE</p>
+            <h2>Administration</h2>
+            <p class="activate-admin-note">Modifie les prix et le texte « À propos ». Les changements sont enregistrés côté serveur.</p>
+            <div id="activate-admin-form"></div>
+            <button id="activate-admin-save" class="activate-main-btn" type="button">Enregistrer</button>
+            <p id="activate-admin-message"></p>
+          </div>
+        </div>`);
+      overlay = document.getElementById("activate-admin-overlay");
+      document.getElementById("activate-admin-close").onclick = () => { overlay.hidden = true; };
+    }
+    const settings = window.ACTIVATE_SITE_SETTINGS || {
+      plans: [
+        { sku: "activate_basic", name: "Standard", monthlyPrice: 20.99, annualPrice: 228 },
+        { sku: "activate_pro", name: "Accès anticipé", monthlyPrice: 42.99, annualPrice: 428 }
+      ],
+      about: { title: "", text1: "", text2: "" }
+    };
+    const form = document.getElementById("activate-admin-form");
+    form.innerHTML = `
+      <h3>Prix des abonnements</h3>
+      ${settings.plans.map((p, i) => `
+        <div class="activate-admin-plan">
+          <input data-admin-plan-name="${i}" value="${escapeHtml(p.name)}" aria-label="Nom ${i + 1}">
+          <input data-admin-monthly="${i}" type="number" min="0" step="0.01" value="${Number(p.monthlyPrice)}" aria-label="Prix mensuel">
+          <input data-admin-annual="${i}" type="number" min="0" step="0.01" value="${Number(p.annualPrice)}" aria-label="Prix annuel">
+        </div>`).join("")}
+      <h3>À propos</h3>
+      <label>Titre<input id="admin-about-title" value="${escapeHtml(settings.about?.title || "")}"></label>
+      <label>Texte 1<textarea id="admin-about-text1">${escapeHtml(settings.about?.text1 || "")}</textarea></label>
+      <label>Texte 2<textarea id="admin-about-text2">${escapeHtml(settings.about?.text2 || "")}</textarea></label>
+    `;
+    const msg = document.getElementById("activate-admin-message");
+    msg.textContent = "";
+    document.getElementById("activate-admin-save").onclick = async () => {
+      const save = document.getElementById("activate-admin-save");
+      save.disabled = true;
+      msg.textContent = "Enregistrement…";
+      try {
+        const next = {
+          plans: settings.plans.map((p, i) => ({
+            sku: p.sku,
+            name: form.querySelector(`[data-admin-plan-name="${i}"]`).value.trim(),
+            monthlyPrice: Number(form.querySelector(`[data-admin-monthly="${i}"]`).value),
+            annualPrice: Number(form.querySelector(`[data-admin-annual="${i}"]`).value)
+          })),
+          about: {
+            title: document.getElementById("admin-about-title").value,
+            text1: document.getElementById("admin-about-text1").value,
+            text2: document.getElementById("admin-about-text2").value
+          }
+        };
+        const result = await apiJson("/api/admin/settings", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ settings: next })
+        });
+        window.ACTIVATE_SITE_SETTINGS = result.settings;
+        applySiteSettings(result.settings);
+        msg.textContent = "✓ Modifications enregistrées.";
+      } catch (e) {
+        msg.textContent = `Erreur : ${e.message}`;
+      } finally { save.disabled = false; }
+    };
+    overlay.hidden = false;
+  }
 
 function setupUI() {
   if (window.ACTIVATE_UI_SETUP_DONE) return;
-
   const nav = document.querySelector(".cyber-navbar nav");
   if (!nav) return;
-
   window.ACTIVATE_UI_SETUP_DONE = true;
 
   // Supprime les contrôles éventuellement injectés par d'anciennes versions.
@@ -313,7 +299,6 @@ function setupUI() {
   linkShell.appendChild(dashboard);
 
   let authBtn = document.getElementById("activate-login-btn");
-
   if (!authBtn) {
     authBtn = document.createElement("button");
     authBtn.id = "activate-login-btn";
@@ -323,7 +308,6 @@ function setupUI() {
   }
 
   let cartBtn = document.getElementById("activate-cart-btn");
-
   if (!cartBtn) {
     cartBtn = document.createElement("button");
     cartBtn.id = "activate-cart-btn";
@@ -331,10 +315,10 @@ function setupUI() {
     cartBtn.className = "activate-nav-btn activate-cart-btn";
     cartBtn.type = "button";
   }
-
   cartBtn.innerHTML = '🛒 Panier <span id="activate-cart-count">0</span>';
 
   nav.append(linkShell, cartBtn, authBtn);
+
 
   // Ouvre les pages Dashboard/sections dans une superposition sur la page actuelle.
   if (!document.getElementById("activate-dashboard-overlay")) {
@@ -376,14 +360,13 @@ function setupUI() {
     document.body.classList.add("activate-dashboard-open");
   };
 
+
   function renderDashboardOverlay() {
     let panel = document.getElementById("activate-dashboard-direct");
-
     if (!panel) {
       panel = document.createElement("div");
       panel.id = "activate-dashboard-direct";
       panel.className = "activate-dashboard-direct";
-
       panel.innerHTML = `
         <div class="activate-dashboard-direct-card">
           <button class="activate-close" id="activate-dashboard-direct-close" type="button">×</button>
@@ -395,9 +378,7 @@ function setupUI() {
           <div class="activate-dashboard-content" id="activate-dashboard-direct-content"></div>
         </div>
       `;
-
       document.body.appendChild(panel);
-
       document.getElementById("activate-dashboard-direct-close").onclick = () => {
         panel.remove();
         document.body.classList.remove("activate-dashboard-open");
@@ -417,11 +398,9 @@ function setupUI() {
           <h2>${user ? "Bienvenue" : "Connexion requise"}</h2>
           <p>${user ? escapeHtml(user.email || "") : "Connecte-toi avec le bouton Connexion pour accéder à ton compte."}</p>
         </section>
-
         <section class="activate-dashboard-card">
           <p class="activate-dashboard-kicker">PANIER</p>
           <h2>${items.length} article${items.length > 1 ? "s" : ""}</h2>
-
           ${
             items.length
               ? `<div class="activate-dashboard-items">
@@ -433,12 +412,7 @@ function setupUI() {
                     </div>
                   `).join("")}
                 </div>
-
-                <div class="activate-dashboard-total">
-                  <span>Total</span>
-                  <strong>${formatEUR(total)}</strong>
-                </div>
-
+                <div class="activate-dashboard-total"><span>Total</span><strong>${formatEUR(total)}</strong></div>
                 <a class="activate-paypal-button" href="${paypalLink(total)}" target="_blank" rel="noopener noreferrer">
                   Payer ${formatEUR(total)} avec PayPal
                 </a>`
@@ -529,7 +503,6 @@ function setupUI() {
     msg.textContent = message;
     email.focus();
   };
-
   window.ACTIVATE_OPEN_AUTH = openAuth;
 
   authBtn.onclick = openAuth;
@@ -541,58 +514,36 @@ function setupUI() {
 
   sw.onclick = () => {
     signup = !signup;
-
     document.getElementById("activate-auth-title").textContent =
       signup ? "Créer un compte" : "Connexion";
-
-    submit.textContent =
-      signup ? "Créer le compte" : "Se connecter";
-
-    sw.textContent =
-      signup ? "J’ai déjà un compte" : "Créer un compte";
-
-    password.autocomplete =
-      signup ? "new-password" : "current-password";
+    submit.textContent = signup ? "Créer le compte" : "Se connecter";
+    sw.textContent = signup ? "J’ai déjà un compte" : "Créer un compte";
+    password.autocomplete = signup ? "new-password" : "current-password";
   };
 
   submit.onclick = async () => {
     msg.textContent = "";
-
     try {
       if (signup) {
-        await createUserWithEmailAndPassword(
-          auth,
-          email.value.trim(),
-          password.value
-        );
+        await createUserWithEmailAndPassword(auth, email.value.trim(), password.value);
       } else {
-        await signInWithEmailAndPassword(
-          auth,
-          email.value.trim(),
-          password.value
-        );
+        await signInWithEmailAndPassword(auth, email.value.trim(), password.value);
       }
-
       modal.hidden = true;
     } catch (e) {
-      msg.textContent =
-        e.code?.replace("auth/", "") ||
-        "Une erreur est survenue.";
+      msg.textContent = e.code?.replace("auth/", "") || "Une erreur est survenue.";
     }
   };
 
   googleBtn.onclick = async () => {
     msg.textContent = "";
     googleBtn.disabled = true;
-
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
       modal.hidden = true;
     } catch (e) {
-      msg.textContent =
-        e.code?.replace("auth/", "") ||
-        "Connexion Google impossible.";
+      msg.textContent = e.code?.replace("auth/", "") || "Connexion Google impossible.";
     } finally {
       googleBtn.disabled = false;
     }
@@ -614,11 +565,9 @@ function setupUI() {
 
     // Le bouton Admin n'est affiché que si l'API confirme le custom claim admin.
     document.getElementById("activate-admin-btn")?.remove();
-
     if (user) {
       try {
         const adminResult = await apiJson("/api/admin/me");
-
         if (adminResult.admin) {
           const adminBtn = document.createElement("button");
           adminBtn.id = "activate-admin-btn";
@@ -626,7 +575,6 @@ function setupUI() {
           adminBtn.type = "button";
           adminBtn.textContent = "⚙ Admin";
           adminBtn.onclick = openAdminPanel;
-
           const nav = document.querySelector(".cyber-navbar nav");
           nav?.appendChild(adminBtn);
         }
@@ -637,80 +585,37 @@ function setupUI() {
   // Synchronise l'affichage des prix avec le bouton Mensuel / Annuel de la page.
   // En annuel, le gros prix est le montant réellement facturé en une fois.
   function syncActivatePricing() {
-    const activeBillingButton = document.querySelector(
-      '.cyber-billing-switch button.is-active, .cyber-billing-switch button[aria-pressed="true"]'
-    );
-
-    const isAnnual =
-      activeBillingButton?.textContent?.trim().toLowerCase() === "annuel";
-
+    const activeBillingButton = document.querySelector('.cyber-billing-switch button.is-active, .cyber-billing-switch button[aria-pressed="true"]');
+    const isAnnual = activeBillingButton?.textContent?.trim().toLowerCase() === "annuel";
     const plans = Array.from(document.querySelectorAll(".cyber-plan"));
     const annualPrices = [228, 428];
 
     plans.forEach((card, index) => {
-      const priceStrong =
-        card.querySelector(".cyber-plan-price strong");
-
-      const pricePeriod =
-        card.querySelector(".cyber-plan-price span");
-
-      const action =
-        card.querySelector(".cyber-plan-action");
-
+      const priceStrong = card.querySelector(".cyber-plan-price strong");
+      const pricePeriod = card.querySelector(".cyber-plan-price span");
+      const action = card.querySelector(".cyber-plan-action");
       if (!priceStrong || !pricePeriod) return;
 
       if (!card.dataset.activateMonthlyPrice) {
-        const monthlyButtonPrice =
-          parseEuro(action?.textContent || "");
-
-        card.dataset.activateMonthlyPrice =
-          String(
-            monthlyButtonPrice ||
-            parseEuro(priceStrong.textContent || "")
-          );
+        const monthlyButtonPrice = parseEuro(action?.textContent || "");
+        card.dataset.activateMonthlyPrice = String(monthlyButtonPrice || parseEuro(priceStrong.textContent || ""));
       }
 
-      const monthlyPrice =
-        Number(card.dataset.activateMonthlyPrice);
-
-      const annualPrice =
-        annualPrices[index];
+      const monthlyPrice = Number(card.dataset.activateMonthlyPrice);
+      const annualPrice = annualPrices[index];
 
       if (isAnnual && annualPrice) {
-        priceStrong.textContent =
-          formatEUR(annualPrice);
-
-        pricePeriod.textContent =
-          "/ an";
-
-        const billing =
-          card.querySelector(".cyber-plan-billing");
-
-        if (billing)
-          billing.textContent =
-            "Facturé en une fois";
-
-        if (action)
-          action.textContent =
-            `Ajouter au panier — ${formatEUR(annualPrice)}`;
-
+        priceStrong.textContent = formatEUR(annualPrice);
+        pricePeriod.textContent = "/ an";
+        const billing = card.querySelector(".cyber-plan-billing");
+        if (billing) billing.textContent = "Facturé en une fois";
+        if (action) action.textContent = `Ajouter au panier — ${formatEUR(annualPrice)}`;
       } else if (monthlyPrice) {
-        priceStrong.textContent =
-          formatEUR(monthlyPrice);
-
-        pricePeriod.textContent =
-          "/ mois";
-
-        const billing =
-          card.querySelector(".cyber-plan-billing");
-
-        if (billing)
-          billing.textContent =
-            "Facturé mensuellement";
-
-        if (action)
-          action.textContent =
-            `Ajouter au panier — ${formatEUR(monthlyPrice)}`;
+        priceStrong.textContent = formatEUR(monthlyPrice);
+        pricePeriod.textContent = "/ mois";
+        const billing = card.querySelector(".cyber-plan-billing");
+        if (billing) billing.textContent = "Facturé mensuellement";
+        if (action) action.textContent = `Ajouter au panier — ${formatEUR(monthlyPrice)}`;
       }
     });
   }
@@ -720,32 +625,11 @@ function setupUI() {
 
   // Surveille uniquement le sélecteur Mensuel/Annuel au lieu de tout le document.
   // Cela évite une boucle de mutations qui pouvait faire charger la page en continu.
-  const billingSwitch =
-    document.querySelector(".cyber-billing-switch");
-
-  if (
-    billingSwitch &&
-    !billingSwitch.dataset.activatePricingObserver
-  ) {
+  const billingSwitch = document.querySelector('.cyber-billing-switch');
+  if (billingSwitch && !billingSwitch.dataset.activatePricingObserver) {
     billingSwitch.dataset.activatePricingObserver = "1";
-
-    const pricingObserver =
-      new MutationObserver(() =>
-        syncActivatePricing()
-      );
-
-    pricingObserver.observe(
-      billingSwitch,
-      {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: [
-          "aria-pressed",
-          "class"
-        ]
-      }
-    );
+    const pricingObserver = new MutationObserver(() => syncActivatePricing());
+    pricingObserver.observe(billingSwitch, { childList: true, subtree: true, attributes: true, attributeFilter: ["aria-pressed", "class"] });
   }
 
   document.addEventListener("click", (event) => {
@@ -758,81 +642,28 @@ function setupUI() {
   // du site original, afin qu'un abonnement ne puisse jamais être ajouté sans compte.
   if (!window.ACTIVATE_PLAN_CAPTURE_BOUND) {
     window.ACTIVATE_PLAN_CAPTURE_BOUND = true;
-
     document.addEventListener("click", (event) => {
-      const button =
-        event.target.closest?.(".cyber-plan-action");
-
+      const button = event.target.closest?.(".cyber-plan-action");
       if (!button) return;
-
       event.preventDefault();
       event.stopImmediatePropagation();
 
       if (!auth.currentUser) {
-        window.ACTIVATE_OPEN_AUTH?.(
-          "Connecte-toi ou crée un compte avant d'ajouter une formule au panier."
-        );
+        window.ACTIVATE_OPEN_AUTH?.("Connecte-toi ou crée un compte avant d'ajouter une formule au panier.");
         return;
       }
 
-      const card =
-        button.closest(
-          ".cyber-plan, .cyber-school-plan"
-        );
-
+      const card = button.closest(".cyber-plan, .cyber-school-plan");
       if (!card) return;
-
-      const name =
-        card.querySelector(
-          ".cyber-plan-name, .cyber-school-plan h4"
-        )?.textContent?.trim() ||
-        "Abonnement Activate";
-
-      const activeBillingButton =
-        document.querySelector(
-          '.cyber-billing-switch button.is-active, .cyber-billing-switch button[aria-pressed="true"]'
-        );
-
-      const annual =
-        activeBillingButton?.textContent?.trim().toLowerCase() ===
-        "annuel";
-
-      const planIndex =
-        Array.from(
-          document.querySelectorAll(".cyber-plan")
-        ).indexOf(card);
-
-      const price =
-        annual && [228, 428][planIndex]
-          ? [228, 428][planIndex]
-          : parseEuro(button.textContent) ||
-            parseEuro(
-              card.querySelector(
-                ".cyber-plan-price strong"
-              )?.textContent
-            );
-
-      const period =
-        annual ? "annuel" : "mensuel";
-
+      const name = card.querySelector(".cyber-plan-name, .cyber-school-plan h4")?.textContent?.trim() || "Abonnement Activate";
+      const activeBillingButton = document.querySelector(".cyber-billing-switch button.is-active, .cyber-billing-switch button[aria-pressed=\"true\"]");
+      const annual = activeBillingButton?.textContent?.trim().toLowerCase() === "annuel";
+      const planIndex = Array.from(document.querySelectorAll(".cyber-plan")).indexOf(card);
+      const price = annual && [228,428][planIndex] ? [228,428][planIndex] : parseEuro(button.textContent) || parseEuro(card.querySelector(".cyber-plan-price strong")?.textContent);
+      const period = annual ? "annuel" : "mensuel";
       if (!price) return;
-
       const items = cart();
-
-      if (
-        !items.some(
-          x =>
-            x.name === name &&
-            x.period === period
-        )
-      ) {
-        items.push({
-          name,
-          price,
-          period
-        });
-      }
-
+      if (!items.some(x => x.name === name && x.period === period)) items.push({name, price, period});
       saveCart(items);
       openCart();
     }, true);
@@ -843,20 +674,13 @@ function setupUI() {
   // Mensuel / Annuel utilise toujours le bon montant.
   document.querySelectorAll(".cyber-plan-action").forEach((button) => {
     if (button.dataset.activatePaymentBound === "1") return;
-
     button.dataset.activatePaymentBound = "1";
 
-    const card =
-      button.closest(
-        ".cyber-plan, .cyber-school-plan"
-      );
-
+    const card = button.closest(".cyber-plan, .cyber-school-plan");
     if (!card) return;
 
     const name =
-      card.querySelector(
-        ".cyber-plan-name, .cyber-school-plan h4"
-      )?.textContent?.trim() ||
+      card.querySelector(".cyber-plan-name, .cyber-school-plan h4")?.textContent?.trim() ||
       "Abonnement Activate";
 
     button.href = "#";
@@ -867,80 +691,35 @@ function setupUI() {
 
       // Un compte est obligatoire avant de pouvoir ajouter un article au panier.
       if (!auth.currentUser) {
-        openAuth(
-          "Connecte-toi ou crée un compte pour ajouter une formule au panier."
-        );
+        openAuth("Connecte-toi ou crée un compte pour ajouter une formule au panier.");
         return;
       }
 
-      const annualToggle =
-        document.querySelector(
-          '.cyber-billing-switch button[aria-pressed="true"]'
-        );
-
-      const isAnnual =
-        !!document.querySelector(
-          ".cyber-billing-switch button.is-active"
-        ) &&
-        document.querySelector(
-          ".cyber-billing-switch button.is-active"
-        )?.textContent?.trim().toLowerCase() ===
-        "annuel";
-
+      const annualToggle = document.querySelector('.cyber-billing-switch button[aria-pressed="true"]');
+      const isAnnual = !!document.querySelector('.cyber-billing-switch button.is-active') && document.querySelector('.cyber-billing-switch button.is-active')?.textContent?.trim().toLowerCase() === "annuel";
       const annualPrices = [228, 428];
-
-      const planIndex =
-        Array.from(
-          document.querySelectorAll(".cyber-plan")
-        ).indexOf(card);
+      const planIndex = Array.from(document.querySelectorAll(".cyber-plan")).indexOf(card);
 
       let price;
       let period;
 
-      if (
-        isAnnual &&
-        annualPrices[planIndex]
-      ) {
-        price =
-          annualPrices[planIndex];
-
-        period =
-          "annuel";
+      if (isAnnual && annualPrices[planIndex]) {
+        price = annualPrices[planIndex];
+        period = "annuel";
       } else {
-        price =
-          parseEuro(
-            card.querySelector(
-              ".cyber-plan-price strong"
-            )?.textContent
-          );
-
-        period =
-          "mensuel";
+        price = parseEuro(card.querySelector(".cyber-plan-price strong")?.textContent);
+        period = "mensuel";
       }
 
       if (!price) return;
 
-      button.textContent =
-        `Ajouter au panier — ${formatEUR(price)}`;
+      button.textContent = `Ajouter au panier — ${formatEUR(price)}`;
 
       const items = cart();
-
-      if (
-        !items.some(
-          x =>
-            x.name === name &&
-            x.period === period
-        )
-      ) {
-        items.push({
-          name,
-          price: Number(price),
-          period
-        });
-
+      if (!items.some(x => x.name === name && x.period === period)) {
+        items.push({ name, price: Number(price), period });
         saveCart(items);
       }
-
       openCart();
     });
   });
@@ -950,238 +729,93 @@ function setupUI() {
 }
 
 function renderDashboardIfPresent() {
-  let root =
-    document.getElementById("activate-dashboard");
+  let root = document.getElementById("activate-dashboard");
 
   // Le Dashboard vit sur la page principale et utilise uniquement #dashboard.
-  if (
-    !root &&
-    window.location.hash === "#dashboard"
-  ) {
+  if (!root && window.location.hash === "#dashboard") {
     root = document.createElement("section");
-
-    root.id =
-      "activate-dashboard";
-
-    root.className =
-      "activate-dashboard-main";
-
-    root.dataset.activateDashboardDynamic =
-      "1";
-
+    root.id = "activate-dashboard";
+    root.className = "activate-dashboard-main";
+    root.dataset.activateDashboardDynamic = "1";
     root.innerHTML = `
       <div class="activate-dashboard-heading">
         <p class="cyber-eyebrow"><span></span> ESPACE CLIENT</p>
         <h1>Dashboard <strong>Activate.</strong></h1>
         <p>Retrouve ton compte, ton panier et le montant à payer.</p>
       </div>
-
       <div class="activate-dashboard-content"></div>
     `;
-
     document.body.appendChild(root);
-
-    root =
-      root.querySelector(
-        "#activate-dashboard"
-      ) || root;
+    root = root.querySelector("#activate-dashboard") || root;
   }
 
   if (!root) {
-    const dynamic =
-      document.querySelector(
-        '[data-activate-dashboard-dynamic="1"]'
-      );
-
-    if (
-      dynamic &&
-      window.location.hash !== "#dashboard"
-    ) {
-      dynamic.remove();
-    }
-
+    const dynamic = document.querySelector('[data-activate-dashboard-dynamic="1"]');
+    if (dynamic && window.location.hash !== "#dashboard") dynamic.remove();
     return;
   }
 
-  if (
-    root.dataset.activateDashboardDynamic === "1" &&
-    window.location.hash !== "#dashboard"
-  ) {
+  if (root.dataset.activateDashboardDynamic === "1" && window.location.hash !== "#dashboard") {
     root.remove();
     return;
   }
 
   // Si le conteneur a été créé ci-dessus, le contenu réel est rendu dans sa zone dédiée.
-  const contentRoot =
-    root.querySelector(
-      ".activate-dashboard-content"
-    );
-
+  const contentRoot = root.querySelector(".activate-dashboard-content");
   if (contentRoot) {
-    contentRoot.id =
-      "activate-dashboard-content";
+    contentRoot.id = "activate-dashboard-content";
   }
 
-  const user =
-    window.ACTIVATE_CURRENT_USER;
+  const user = window.ACTIVATE_CURRENT_USER;
+  const items = cart();
+  const total = items.reduce((sum, x) => sum + Number(x.price || 0), 0);
 
-  const items =
-    cart();
-
-  const total =
-    items.reduce(
-      (sum, x) =>
-        sum + Number(x.price || 0),
-      0
-    );
-
-  const dashboardTarget =
-    document.getElementById(
-      "activate-dashboard-content"
-    ) || root;
-
+  const dashboardTarget = document.getElementById("activate-dashboard-content") || root;
   dashboardTarget.innerHTML = `
     <div class="activate-dashboard-grid">
-
       <section class="activate-dashboard-card">
         <p class="activate-dashboard-kicker">COMPTE</p>
-
-        <h2>
-          ${user ? "Bienvenue" : "Connexion requise"}
-        </h2>
-
-        <p>
-          ${
-            user
-              ? escapeHtml(user.email || "")
-              : "Connecte-toi avec le bouton Connexion pour accéder à ton compte."
-          }
-        </p>
+        <h2>${user ? "Bienvenue" : "Connexion requise"}</h2>
+        <p>${user ? escapeHtml(user.email || "") : "Connecte-toi avec le bouton Connexion pour accéder à ton compte."}</p>
       </section>
-
       <section class="activate-dashboard-card">
-
         <p class="activate-dashboard-kicker">PANIER</p>
-
-        <h2>
-          ${items.length}
-          article${items.length > 1 ? "s" : ""}
-        </h2>
-
+        <h2>${items.length} article${items.length > 1 ? "s" : ""}</h2>
         ${
           items.length
-            ? `
-              <div class="activate-dashboard-items">
-
+            ? `<div class="activate-dashboard-items">
                 ${items.map((x, i) => `
                   <div class="activate-dashboard-item">
-
-                    <span>
-                      ${escapeHtml(x.name)}
-                      ${
-                        x.period
-                          ? ` <small>(${escapeHtml(x.period)})</small>`
-                          : ""
-                      }
-                    </span>
-
-                    <strong>
-                      ${formatEUR(x.price)}
-                    </strong>
-
-                    <button
-                      type="button"
-                      data-dashboard-remove="${i}"
-                      aria-label="Supprimer"
-                    >
-                      ×
-                    </button>
-
+                    <span>${escapeHtml(x.name)}${x.period ? ` <small>(${escapeHtml(x.period)})</small>` : ""}</span>
+                    <strong>${formatEUR(x.price)}</strong>
+                    <button type="button" data-dashboard-remove="${i}" aria-label="Supprimer">×</button>
                   </div>
                 `).join("")}
-
               </div>
-
-              <div class="activate-dashboard-total">
-                <span>Total</span>
-                <strong>
-                  ${formatEUR(total)}
-                </strong>
-              </div>
-
-              <a
-                class="activate-paypal-button"
-                href="${paypalLink(total)}"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
+              <div class="activate-dashboard-total"><span>Total</span><strong>${formatEUR(total)}</strong></div>
+              <a class="activate-paypal-button" href="${paypalLink(total)}" target="_blank" rel="noopener noreferrer">
                 Payer ${formatEUR(total)} avec PayPal
               </a>
-
-              <p class="activate-dashboard-note">
-                Le lien PayPal ouvre le paiement correspondant au total affiché.
-              </p>
-            `
-            : `
-              <p class="activate-dashboard-empty">
-                Ton panier est vide. Retourne aux abonnements pour choisir une formule.
-              </p>
-
-              <a
-                class="activate-dashboard-back"
-                href="https://activate-cyber.github.io/#subscriptions"
-              >
-                Voir les abonnements
-              </a>
-            `
+              <p class="activate-dashboard-note">Le lien PayPal ouvre le paiement correspondant au total affiché.</p>`
+            : `<p class="activate-dashboard-empty">Ton panier est vide. Retourne aux abonnements pour choisir une formule.</p>
+               <a class="activate-dashboard-back" href="https://activate-cyber.github.io/#subscriptions">Voir les abonnements</a>`
         }
-
       </section>
-
     </div>
   `;
 
-  dashboardTarget
-    .querySelectorAll(
-      "[data-dashboard-remove]"
-    )
-    .forEach(btn => {
-
-      btn.addEventListener(
-        "click",
-        () => {
-
-          const itemsNow =
-            cart();
-
-          itemsNow.splice(
-            Number(
-              btn.dataset.dashboardRemove
-            ),
-            1
-          );
-
-          saveCart(itemsNow);
-          renderDashboardIfPresent();
-        }
-      );
-
+  dashboardTarget.querySelectorAll("[data-dashboard-remove]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const itemsNow = cart();
+      itemsNow.splice(Number(btn.dataset.dashboardRemove), 1);
+      saveCart(itemsNow);
+      renderDashboardIfPresent();
     });
+  });
 }
 
-window.addEventListener(
-  "activate-auth-changed",
-  renderDashboardIfPresent
-);
-
-window.addEventListener(
-  "storage",
-  renderDashboardIfPresent
-);
-
-window.addEventListener(
-  "hashchange",
-  renderDashboardIfPresent
-);
+window.addEventListener("activate-auth-changed", renderDashboardIfPresent);
+window.addEventListener("storage", renderDashboardIfPresent);
+window.addEventListener("hashchange", renderDashboardIfPresent);
 
 waitForApp(setupUI);
