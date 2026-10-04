@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 
 const config = window.ACTIVATE_FIREBASE_CONFIG;
 if (!config) throw new Error("Configuration Firebase Activate introuvable.");
@@ -194,17 +194,104 @@ function setupUI() {
   const openDashboardOverlay = (href) => {
     const url = new URL(href, window.location.origin);
     const hash = url.hash || "#dashboard";
+
     // L'URL visible reste toujours la page principale.
     history.pushState(null, "", `${window.location.origin}/${hash}`);
-    // Le contenu de dashboard.html s'affiche dans la superposition.
+
+    // Pour le Dashboard, on rend directement le vrai contenu sur la page principale.
+    // Cela évite un iframe vide et garde exactement le comportement de Connexion.
+    if (hash === "#dashboard") {
+      dashboardFrame.removeAttribute("src");
+      dashboardFrame.src = "about:blank";
+      dashboardOverlay.hidden = true;
+      document.body.classList.add("activate-dashboard-open");
+      renderDashboardOverlay();
+      return;
+    }
+
+    // Les autres sections utilisent dashboard.html dans la superposition.
     dashboardFrame.src = `${window.location.origin}/dashboard.html${hash}`;
     dashboardOverlay.hidden = false;
     document.body.classList.add("activate-dashboard-open");
   };
 
+
+  function renderDashboardOverlay() {
+    let panel = document.getElementById("activate-dashboard-direct");
+    if (!panel) {
+      panel = document.createElement("div");
+      panel.id = "activate-dashboard-direct";
+      panel.className = "activate-dashboard-direct";
+      panel.innerHTML = `
+        <div class="activate-dashboard-direct-card">
+          <button class="activate-close" id="activate-dashboard-direct-close" type="button">×</button>
+          <div class="activate-dashboard-heading">
+            <p class="cyber-eyebrow"><span></span> ESPACE CLIENT</p>
+            <h1>Dashboard <strong>Activate.</strong></h1>
+            <p>Retrouve ton compte, ton panier et le montant à payer.</p>
+          </div>
+          <div class="activate-dashboard-content" id="activate-dashboard-direct-content"></div>
+        </div>
+      `;
+      document.body.appendChild(panel);
+      document.getElementById("activate-dashboard-direct-close").onclick = () => {
+        panel.remove();
+        document.body.classList.remove("activate-dashboard-open");
+        history.pushState(null, "", `${window.location.origin}/`);
+      };
+    }
+
+    const user = window.ACTIVATE_CURRENT_USER;
+    const items = cart();
+    const total = items.reduce((sum, x) => sum + Number(x.price || 0), 0);
+    const content = document.getElementById("activate-dashboard-direct-content");
+
+    content.innerHTML = `
+      <div class="activate-dashboard-grid">
+        <section class="activate-dashboard-card">
+          <p class="activate-dashboard-kicker">COMPTE</p>
+          <h2>${user ? "Bienvenue" : "Connexion requise"}</h2>
+          <p>${user ? escapeHtml(user.email || "") : "Connecte-toi avec le bouton Connexion pour accéder à ton compte."}</p>
+        </section>
+        <section class="activate-dashboard-card">
+          <p class="activate-dashboard-kicker">PANIER</p>
+          <h2>${items.length} article${items.length > 1 ? "s" : ""}</h2>
+          ${
+            items.length
+              ? `<div class="activate-dashboard-items">
+                  ${items.map((x, i) => `
+                    <div class="activate-dashboard-item">
+                      <span>${escapeHtml(x.name)}${x.period ? ` <small>(${escapeHtml(x.period)})</small>` : ""}</span>
+                      <strong>${formatEUR(x.price)}</strong>
+                      <button type="button" data-dashboard-direct-remove="${i}">×</button>
+                    </div>
+                  `).join("")}
+                </div>
+                <div class="activate-dashboard-total"><span>Total</span><strong>${formatEUR(total)}</strong></div>
+                <a class="activate-paypal-button" href="${paypalLink(total)}" target="_blank" rel="noopener noreferrer">
+                  Payer ${formatEUR(total)} avec PayPal
+                </a>`
+              : `<p class="activate-dashboard-empty">Ton panier est vide.</p>
+                 <a class="activate-dashboard-back" href="${window.location.origin}/#subscriptions">Voir les abonnements</a>`
+          }
+        </section>
+      </div>
+    `;
+
+    content.querySelectorAll("[data-dashboard-direct-remove]").forEach(btn => {
+      btn.onclick = () => {
+        const itemsNow = cart();
+        itemsNow.splice(Number(btn.dataset.dashboardDirectRemove), 1);
+        saveCart(itemsNow);
+        renderDashboardOverlay();
+      };
+    });
+  }
+
   closeDashboard.onclick = () => {
     dashboardOverlay.hidden = true;
     dashboardFrame.src = "about:blank";
+    document.getElementById("activate-dashboard-direct")?.remove();
     document.body.classList.remove("activate-dashboard-open");
     history.pushState(null, "", `${window.location.origin}/`);
   };
@@ -231,6 +318,7 @@ function setupUI() {
           <input id="activate-email" type="email" placeholder="Adresse e-mail" autocomplete="email">
           <input id="activate-password" type="password" placeholder="Mot de passe" autocomplete="current-password">
           <button id="activate-auth-submit" class="activate-main-btn" type="button">Se connecter</button>
+          <button id="activate-google-login" class="activate-google-btn" type="button">Continuer avec Google</button>
           <button id="activate-auth-switch" class="activate-link-btn" type="button">Créer un compte</button>
           <p id="activate-auth-message"></p>
         </div>
@@ -250,6 +338,7 @@ function setupUI() {
   const password = document.getElementById("activate-password");
   const submit = document.getElementById("activate-auth-submit");
   const sw = document.getElementById("activate-auth-switch");
+  const googleBtn = document.getElementById("activate-google-login");
   const msg = document.getElementById("activate-auth-message");
 
   let signup = false;
@@ -286,6 +375,20 @@ function setupUI() {
       modal.hidden = true;
     } catch (e) {
       msg.textContent = e.code?.replace("auth/", "") || "Une erreur est survenue.";
+    }
+  };
+
+  googleBtn.onclick = async () => {
+    msg.textContent = "";
+    googleBtn.disabled = true;
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+      modal.hidden = true;
+    } catch (e) {
+      msg.textContent = e.code?.replace("auth/", "") || "Connexion Google impossible.";
+    } finally {
+      googleBtn.disabled = false;
     }
   };
 

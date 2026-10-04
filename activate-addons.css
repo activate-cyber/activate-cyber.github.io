@@ -303,3 +303,40 @@
 .activate-dashboard-open{
   overflow:hidden;
 }
+
+.activate-dashboard-direct{
+  position:fixed;
+  inset:0;
+  z-index:9995;
+  background:#050505;
+  overflow:auto;
+  padding:70px 24px 40px;
+  box-sizing:border-box;
+}
+.activate-dashboard-direct-card{
+  position:relative;
+  max-width:1200px;
+  margin:0 auto;
+}
+.activate-dashboard-direct .activate-close{
+  position:fixed;
+  top:18px;
+  right:24px;
+  z-index:10000;
+}
+
+/* Connexion Google */
+#activate-google-login.activate-google-btn {
+  width: 100%;
+  margin-top: 10px;
+  min-height: 44px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 10px;
+  background: #fff;
+  color: #111;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+#activate-google-login.activate-google-btn:hover { filter: brightness(.96); }
+#activate-google-login.activate-google-btn:disabled { opacity: .65; cursor: wait; }
