@@ -2,9 +2,6 @@ import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/11.0.
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 
 const config = window.ACTIVATE_FIREBASE_CONFIG;
-
-// API Activate
-window.ACTIVATE_API_URL = "https://salon-railroad-third-conferencing.trycloudflare.com";
 if (!config) throw new Error("Configuration Firebase Activate introuvable.");
 
 const app = getApps().length ? getApps()[0] : initializeApp(config);
