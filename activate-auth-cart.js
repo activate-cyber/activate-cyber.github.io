@@ -29,54 +29,135 @@ function addToCart(name, price) {
   saveCart(items); openCart();
 }
 function openCart() {
-  const box=document.getElementById("activate-cart-modal"); if(!box) return;
-  const items=cart();
-  box.innerHTML=`<div class="activate-modal-card"><button class="activate-close" data-close-cart>×</button><h2>🛒 Panier</h2>${items.length?`<div class="activate-cart-items">${items.map((x,i)=>`<div class="activate-cart-item"><span>${escapeHtml(x.name)}</span><strong>${Number(x.price).toFixed(2)} €</strong><button data-remove="${i}">×</button></div>`).join("")}</div><div class="activate-cart-total">Total <strong>${items.reduce((a,x)=>a+Number(x.price||0),0).toFixed(2)} €</strong></div><p class="activate-cart-note">Le paiement sera activé avec le système de paiement sécurisé du serveur.</p>`:`<p>Ton panier est vide.</p>`}</div>`;
-  box.hidden=false;
-  box.querySelector("[data-close-cart]")?.addEventListener("click",()=>box.hidden=true);
-  box.querySelectorAll("[data-remove]").forEach(btn=>btn.addEventListener("click",()=>{const a=cart();a.splice(Number(btn.dataset.remove),1);saveCart(a);openCart();}));
+  const box = document.getElementById("activate-cart-modal");
+  if (!box) return;
+
+  const items = cart();
+  const total = items.reduce((sum, x) => sum + Number(x.price || 0), 0);
+
+  box.innerHTML = `
+    <div class="activate-modal-card activate-cart-card">
+      <button class="activate-close" data-close-cart type="button">×</button>
+      <h2>🛒 Panier</h2>
+      ${
+        items.length
+          ? `<div class="activate-cart-items">
+              ${items.map((x, i) => `
+                <div class="activate-cart-item">
+                  <span>${escapeHtml(x.name)}${x.period ? ` <small>(${escapeHtml(x.period)})</small>` : ""}</span>
+                  <strong>${formatEUR(x.price)}</strong>
+                  <button type="button" data-remove="${i}" aria-label="Supprimer">×</button>
+                </div>
+              `).join("")}
+            </div>
+            <div class="activate-cart-total">
+              <span>Total</span>
+              <strong>${formatEUR(total)}</strong>
+            </div>
+            <a class="activate-paypal-button" href="${paypalLink(total)}" target="_blank" rel="noopener noreferrer">
+              Payer ${formatEUR(total)} avec PayPal
+            </a>
+            <p class="activate-cart-note">Le paiement s’ouvre sur PayPal avec le montant affiché.</p>`
+          : `<p>Ton panier est vide.</p>`
+      }
+      <a class="activate-dashboard-back" href="dashboard.html">Ouvrir le Dashboard</a>
+    </div>
+  `;
+
+  box.hidden = false;
+  box.querySelector("[data-close-cart]")?.addEventListener("click", () => {
+    box.hidden = true;
+  });
+
+  box.querySelectorAll("[data-remove]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const itemsNow = cart();
+      itemsNow.splice(Number(btn.dataset.remove), 1);
+      saveCart(itemsNow);
+      openCart();
+    });
+  });
 }
 function escapeHtml(v){return String(v).replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+function formatEUR(value) {
+  return new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(Number(value) || 0);
+}
+
+function paypalLink(amount) {
+  const value = Number(amount) || 0;
+  return value > 0
+    ? `https://paypal.me/echorouge20/${value.toFixed(2)}`
+    : "https://paypal.me/echorouge20";
+}
+
+function parseEuro(text) {
+  const m = String(text || "").match(/(\d+(?:[.,]\d+)?)\s*€/);
+  return m ? Number(m[1].replace(",", ".")) : 0;
+}
 
 function setupUI() {
   const nav = document.querySelector(".cyber-navbar nav");
   if (!nav) return;
 
-  // Le bundle original contient déjà ses propres contrôles Connexion/Panier.
-  // On les retire visuellement pour ne garder que les nouveaux contrôles.
-  document.querySelectorAll(".cyber-account-button, .cyber-cart-button").forEach((el) => {
-    el.remove();
+  // Supprime les contrôles éventuellement injectés par d'anciennes versions.
+  document.querySelectorAll(".cyber-account-button, .cyber-cart-button").forEach(el => el.remove());
+  document.querySelectorAll('[data-activate-old-control="true"]').forEach(el => el.remove());
+
+  // Recrée la navigation à partir des liens présents, sans conserver d'anciens doublons.
+  const linkData = Array.from(nav.querySelectorAll("a")).map(a => ({
+    href: a.getAttribute("href") || "",
+    text: a.textContent?.trim() || ""
+  }));
+
+  const getLink = (href, fallbackText) => {
+    const found = linkData.find(x => x.href === href);
+    return {
+      href,
+      text: found?.text || fallbackText
+    };
+  };
+
+  const wanted = [
+    getLink("#services", "Services"),
+    getLink("#about", "À propos"),
+    getLink("#subscriptions", "Abonnements"),
+    getLink("#school-subscriptions", "Tarifs écoles")
+  ];
+
+  const dashboardData = getLink("dashboard.html", "Dashboard");
+  const contactData =
+    linkData.find(x => x.href.startsWith("mailto:")) ||
+    {href:"mailto:activate.cyber@gmail.com", text:"Nous contacter"};
+
+  // Nettoyage complet de la nav : les contrôles seront recréés juste après.
+  nav.innerHTML = "";
+
+  const linkShell = document.createElement("div");
+  linkShell.className = "activate-nav-links";
+
+  wanted.forEach(({href, text}) => {
+    const a = document.createElement("a");
+    a.href = href;
+    a.textContent = text;
+    linkShell.appendChild(a);
   });
 
-  // Nettoie d'éventuels anciens contrôles ajoutés par une version précédente.
-  document.querySelectorAll('[data-activate-old-control="true"]').forEach((el) => el.remove());
+  const dashboard = document.createElement("a");
+  dashboard.href = dashboardData.href;
+  dashboard.textContent = dashboardData.text;
+  linkShell.appendChild(dashboard);
 
-  // Encadre les cinq liens de navigation existants.
-  let linkShell = nav.querySelector(".activate-nav-links");
-  if (!linkShell) {
-    linkShell = document.createElement("div");
-    linkShell.className = "activate-nav-links";
-
-    Array.from(nav.children).forEach((child) => {
-      if (
-        child !== linkShell &&
-        !child.id?.startsWith("activate-") &&
-        !child.dataset?.activateControl
-      ) {
-        linkShell.appendChild(child);
-      }
-    });
-
-    nav.prepend(linkShell);
-  }
-
-  // Si une ancienne version a laissé des doublons dans le cadre, garde un seul exemplaire de chaque lien.
-  const seenHrefs = new Set();
-  Array.from(linkShell.querySelectorAll("a")).forEach((a) => {
-    const href = a.getAttribute("href") || "";
-    if (seenHrefs.has(href)) a.remove();
-    else seenHrefs.add(href);
-  });
+  // Contact reste volontairement hors du cadre.
+  const contact = document.createElement("a");
+  contact.href = contactData.href;
+  contact.textContent = contactData.text;
+  contact.className = "activate-contact-link";
 
   let authBtn = document.getElementById("activate-login-btn");
   if (!authBtn) {
@@ -85,7 +166,6 @@ function setupUI() {
     authBtn.dataset.activateControl = "auth";
     authBtn.className = "activate-nav-btn activate-auth-btn";
     authBtn.type = "button";
-    authBtn.textContent = "Connexion";
   }
 
   let cartBtn = document.getElementById("activate-cart-btn");
@@ -95,12 +175,12 @@ function setupUI() {
     cartBtn.dataset.activateControl = "cart";
     cartBtn.className = "activate-nav-btn activate-cart-btn";
     cartBtn.type = "button";
-    cartBtn.innerHTML = '🛒 Panier <span id="activate-cart-count">0</span>';
   }
+  cartBtn.innerHTML = '🛒 Panier <span id="activate-cart-count">0</span>';
 
-  // Ordre fixe : cadre de navigation -> panier -> connexion tout à droite.
-  nav.append(linkShell, cartBtn, authBtn);
+  nav.append(linkShell, contact, cartBtn, authBtn);
 
+  // Auth modal.
   if (!document.getElementById("activate-auth-modal")) {
     document.body.insertAdjacentHTML(
       "beforeend",
@@ -174,46 +254,114 @@ function setupUI() {
       ? (user.email?.split("@")[0] || "Compte")
       : "Connexion";
 
-    if (user) {
-      authBtn.onclick = async () => {
-        if (confirm("Se déconnecter ?")) await signOut(auth);
-      };
-    } else {
-      authBtn.onclick = openAuth;
-    }
+    authBtn.onclick = user
+      ? async () => {
+          if (confirm("Se déconnecter ?")) await signOut(auth);
+        }
+      : openAuth;
+
+    window.ACTIVATE_CURRENT_USER = user || null;
+    window.dispatchEvent(new CustomEvent("activate-auth-changed"));
   });
 
-  // Les boutons "Ajouter au panier" du site original alimentent maintenant
-  // le même panier local que le nouveau bouton Panier.
-  document.querySelectorAll(".cyber-cart-add").forEach((button) => {
-    if (button.dataset.activateCartBound === "1") return;
-    button.dataset.activateCartBound = "1";
+  // Les boutons de chaque formule deviennent des ajouts au panier avec le prix réel.
+  document.querySelectorAll(".cyber-plan-action").forEach((button) => {
+    if (button.dataset.activatePaymentBound === "1") return;
+    button.dataset.activatePaymentBound = "1";
 
-    button.addEventListener("click", () => {
-      const card = button.closest(".cyber-plan, .cyber-school-plan");
-      if (!card) return;
+    const card = button.closest(".cyber-plan, .cyber-school-plan");
+    if (!card) return;
 
-      const name =
-        card.querySelector(".cyber-plan-name, h4")?.textContent?.trim() ||
-        "Abonnement Activate";
+    const name =
+      card.querySelector(".cyber-plan-name, .cyber-school-plan h4")?.textContent?.trim() ||
+      "Abonnement Activate";
 
-      const priceText =
-        card.querySelector(".cyber-plan-price strong, .cyber-school-price strong")
-          ?.textContent || "0";
+    const billing = card.querySelector(".cyber-plan-billing")?.textContent || "";
+    let price = parseEuro(billing);
 
-      const price = Number(
-        priceText.replace(/[^\d,.-]/g, "").replace(",", ".")
-      );
+    if (!price) {
+      const priceNode =
+        card.querySelector(".cyber-plan-price strong, .cyber-school-price strong");
+      price = parseEuro(priceNode?.textContent);
+    }
+
+    const period =
+      billing.includes("an") && !billing.includes("mois")
+        ? "annuel"
+        : "mensuel";
+
+    button.href = "#";
+    button.removeAttribute("target");
+    button.textContent = `Ajouter au panier — ${formatEUR(price)}`;
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
 
       const items = cart();
-      if (!items.some((x) => x.name === name)) {
-        items.push({ name, price: Number.isFinite(price) ? price : 0 });
+      if (!items.some(x => x.name === name && Number(x.price) === Number(price))) {
+        items.push({ name, price: Number(price), period });
         saveCart(items);
       }
+      openCart();
     });
   });
 
   updateCartBadge();
+  renderDashboardIfPresent();
 }
 
+function renderDashboardIfPresent() {
+  const root = document.getElementById("activate-dashboard");
+  if (!root) return;
+
+  const user = window.ACTIVATE_CURRENT_USER;
+  const items = cart();
+  const total = items.reduce((sum, x) => sum + Number(x.price || 0), 0);
+
+  root.innerHTML = `
+    <div class="activate-dashboard-grid">
+      <section class="activate-dashboard-card">
+        <p class="activate-dashboard-kicker">COMPTE</p>
+        <h2>${user ? "Bienvenue" : "Connexion requise"}</h2>
+        <p>${user ? escapeHtml(user.email || "") : "Connecte-toi avec le bouton Connexion pour accéder à ton compte."}</p>
+      </section>
+      <section class="activate-dashboard-card">
+        <p class="activate-dashboard-kicker">PANIER</p>
+        <h2>${items.length} article${items.length > 1 ? "s" : ""}</h2>
+        ${
+          items.length
+            ? `<div class="activate-dashboard-items">
+                ${items.map((x, i) => `
+                  <div class="activate-dashboard-item">
+                    <span>${escapeHtml(x.name)}${x.period ? ` <small>(${escapeHtml(x.period)})</small>` : ""}</span>
+                    <strong>${formatEUR(x.price)}</strong>
+                    <button type="button" data-dashboard-remove="${i}" aria-label="Supprimer">×</button>
+                  </div>
+                `).join("")}
+              </div>
+              <div class="activate-dashboard-total"><span>Total</span><strong>${formatEUR(total)}</strong></div>
+              <a class="activate-paypal-button" href="${paypalLink(total)}" target="_blank" rel="noopener noreferrer">
+                Payer ${formatEUR(total)} avec PayPal
+              </a>
+              <p class="activate-dashboard-note">Le lien PayPal ouvre le paiement correspondant au total affiché.</p>`
+            : `<p class="activate-dashboard-empty">Ton panier est vide. Retourne aux abonnements pour choisir une formule.</p>
+               <a class="activate-dashboard-back" href="index.html#subscriptions">Voir les abonnements</a>`
+        }
+      </section>
+    </div>
+  `;
+
+  root.querySelectorAll("[data-dashboard-remove]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const itemsNow = cart();
+      itemsNow.splice(Number(btn.dataset.dashboardRemove), 1);
+      saveCart(itemsNow);
+      renderDashboardIfPresent();
+    });
+  });
+}
+
+window.addEventListener("activate-auth-changed", renderDashboardIfPresent);
+window.addEventListener("storage", renderDashboardIfPresent);
+
+waitForApp(setupUI);
 waitForApp(setupUI);
