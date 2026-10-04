@@ -318,7 +318,8 @@ function setupUI() {
           <input id="activate-email" type="email" placeholder="Adresse e-mail" autocomplete="email">
           <input id="activate-password" type="password" placeholder="Mot de passe" autocomplete="current-password">
           <button id="activate-auth-submit" class="activate-main-btn" type="button">Se connecter</button>
-          <button id="activate-google-login" class="activate-google-btn" type="button">Continuer avec Google</button>
+          <div class="activate-auth-divider"><span>ou</span></div>
+          <button id="activate-google-login" class="activate-google-btn" type="button"><span class="activate-google-icon" aria-hidden="true">G</span><span>Continuer avec Google</span></button>
           <button id="activate-auth-switch" class="activate-link-btn" type="button">Créer un compte</button>
           <p id="activate-auth-message"></p>
         </div>
@@ -542,5 +543,4 @@ window.addEventListener("activate-auth-changed", renderDashboardIfPresent);
 window.addEventListener("storage", renderDashboardIfPresent);
 window.addEventListener("hashchange", renderDashboardIfPresent);
 
-waitForApp(setupUI);
 waitForApp(setupUI);
