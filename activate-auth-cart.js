@@ -124,10 +124,10 @@ function setupUI() {
   };
 
   const wanted = [
-    {href:"https://activate-cyber.github.io/dashboard.html#services", text:"Services"},
-    {href:"https://activate-cyber.github.io/dashboard.html#about", text:"À propos"},
-    {href:"https://activate-cyber.github.io/dashboard.html#subscriptions", text:"Abonnements"},
-    {href:"https://activate-cyber.github.io/dashboard.html#school-subscriptions", text:"Tarifs écoles"}
+    {href:"https://activate-cyber.github.io/#services", text:"Services"},
+    {href:"https://activate-cyber.github.io/#about", text:"À propos"},
+    {href:"https://activate-cyber.github.io/#subscriptions", text:"Abonnements"},
+    {href:"https://activate-cyber.github.io/#school-subscriptions", text:"Tarifs écoles"}
   ];
 
   const dashboardData = {
