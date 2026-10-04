@@ -130,7 +130,10 @@ function setupUI() {
     getLink("#school-subscriptions", "Tarifs écoles")
   ];
 
-  const dashboardData = getLink("dashboard.html", "Dashboard");
+  const dashboardData = {
+    href: "https://activate-cyber.github.io/#dashboard",
+    text: "Dashboard"
+  };
   const contactData =
     linkData.find(x => x.href.startsWith("mailto:")) ||
     {href:"mailto:activate.cyber@gmail.com", text:"Nous contacter"};
@@ -310,14 +313,49 @@ function setupUI() {
 }
 
 function renderDashboardIfPresent() {
-  const root = document.getElementById("activate-dashboard");
-  if (!root) return;
+  let root = document.getElementById("activate-dashboard");
+
+  // Le Dashboard vit sur la page principale et utilise uniquement #dashboard.
+  if (!root && window.location.hash === "#dashboard") {
+    root = document.createElement("section");
+    root.id = "activate-dashboard";
+    root.className = "activate-dashboard-main";
+    root.dataset.activateDashboardDynamic = "1";
+    root.innerHTML = `
+      <div class="activate-dashboard-heading">
+        <p class="cyber-eyebrow"><span></span> ESPACE CLIENT</p>
+        <h1>Dashboard <strong>Activate.</strong></h1>
+        <p>Retrouve ton compte, ton panier et le montant à payer.</p>
+      </div>
+      <div class="activate-dashboard-content"></div>
+    `;
+    document.body.appendChild(root);
+    root = root.querySelector("#activate-dashboard") || root;
+  }
+
+  if (!root) {
+    const dynamic = document.querySelector('[data-activate-dashboard-dynamic="1"]');
+    if (dynamic && window.location.hash !== "#dashboard") dynamic.remove();
+    return;
+  }
+
+  if (root.dataset.activateDashboardDynamic === "1" && window.location.hash !== "#dashboard") {
+    root.remove();
+    return;
+  }
+
+  // Si le conteneur a été créé ci-dessus, le contenu réel est rendu dans sa zone dédiée.
+  const contentRoot = root.querySelector(".activate-dashboard-content");
+  if (contentRoot) {
+    contentRoot.id = "activate-dashboard-content";
+  }
 
   const user = window.ACTIVATE_CURRENT_USER;
   const items = cart();
   const total = items.reduce((sum, x) => sum + Number(x.price || 0), 0);
 
-  root.innerHTML = `
+  const dashboardTarget = document.getElementById("activate-dashboard-content") || root;
+  dashboardTarget.innerHTML = `
     <div class="activate-dashboard-grid">
       <section class="activate-dashboard-card">
         <p class="activate-dashboard-kicker">COMPTE</p>
@@ -344,13 +382,13 @@ function renderDashboardIfPresent() {
               </a>
               <p class="activate-dashboard-note">Le lien PayPal ouvre le paiement correspondant au total affiché.</p>`
             : `<p class="activate-dashboard-empty">Ton panier est vide. Retourne aux abonnements pour choisir une formule.</p>
-               <a class="activate-dashboard-back" href="index.html#subscriptions">Voir les abonnements</a>`
+               <a class="activate-dashboard-back" href="https://activate-cyber.github.io/#subscriptions">Voir les abonnements</a>`
         }
       </section>
     </div>
   `;
 
-  root.querySelectorAll("[data-dashboard-remove]").forEach(btn => {
+  dashboardTarget.querySelectorAll("[data-dashboard-remove]").forEach(btn => {
     btn.addEventListener("click", () => {
       const itemsNow = cart();
       itemsNow.splice(Number(btn.dataset.dashboardRemove), 1);
@@ -362,6 +400,7 @@ function renderDashboardIfPresent() {
 
 window.addEventListener("activate-auth-changed", renderDashboardIfPresent);
 window.addEventListener("storage", renderDashboardIfPresent);
+window.addEventListener("hashchange", renderDashboardIfPresent);
 
 waitForApp(setupUI);
 waitForApp(setupUI);
@@ -378,10 +417,10 @@ waitForApp(setupUI);
     const shell=document.createElement("div");
     shell.className="activate-nav-links";
     [
-      ["Services","dashboard.html#services"],
-      ["À propos","dashboard.html#about"],
-      ["Abonnements","dashboard.html#subscriptions"],
-      ["Tarifs écoles","dashboard.html#school-subscriptions"],
+      ["Services","https://activate-cyber.github.io/#services"],
+      ["À propos","https://activate-cyber.github.io/#about"],
+      ["Abonnements","https://activate-cyber.github.io/#subscriptions"],
+      ["Tarifs écoles","https://activate-cyber.github.io/#school-subscriptions"],
       ["Dashboard","https://activate-cyber.github.io/#dashboard"]
     ].forEach(([t,h])=>{
       const a=document.createElement("a");
