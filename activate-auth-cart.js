@@ -417,6 +417,44 @@ function setupUI() {
     window.dispatchEvent(new CustomEvent("activate-auth-changed"));
   });
 
+  // Synchronise l'affichage des prix avec le bouton Mensuel / Annuel de la page.
+  // En annuel, le gros prix est le montant réellement facturé en une fois.
+  function syncActivatePricing() {
+    const annualToggle = document.querySelector('.cyber-billing-switch button[aria-pressed="true"]');
+    const isAnnual = annualToggle?.textContent?.trim().toLowerCase() === "annuel";
+    const plans = Array.from(document.querySelectorAll(".cyber-plan"));
+    const annualPrices = [228, 428];
+
+    plans.forEach((card, index) => {
+      const priceStrong = card.querySelector(".cyber-plan-price strong");
+      const pricePeriod = card.querySelector(".cyber-plan-price span");
+      const action = card.querySelector(".cyber-plan-action");
+      if (!priceStrong || !pricePeriod) return;
+
+      if (!card.dataset.activateMonthlyPrice) {
+        const monthlyButtonPrice = parseEuro(action?.textContent || "");
+        card.dataset.activateMonthlyPrice = String(monthlyButtonPrice || parseEuro(priceStrong.textContent || ""));
+      }
+
+      const monthlyPrice = Number(card.dataset.activateMonthlyPrice);
+      const annualPrice = annualPrices[index];
+
+      if (isAnnual && annualPrice) {
+        priceStrong.textContent = formatEUR(annualPrice);
+        pricePeriod.textContent = "/ an";
+        if (action) action.textContent = `Ajouter au panier — ${formatEUR(annualPrice)}`;
+      } else if (monthlyPrice) {
+        priceStrong.textContent = formatEUR(monthlyPrice);
+        pricePeriod.textContent = "/ mois";
+        if (action) action.textContent = `Ajouter au panier — ${formatEUR(monthlyPrice)}`;
+      }
+    });
+  }
+
+  syncActivatePricing();
+  const pricingObserver = new MutationObserver(() => syncActivatePricing());
+  pricingObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["aria-pressed", "class"] });
+
   // Les boutons de chaque formule deviennent des ajouts au panier avec le prix réel.
   document.querySelectorAll(".cyber-plan-action").forEach((button) => {
     if (button.dataset.activatePaymentBound === "1") return;
