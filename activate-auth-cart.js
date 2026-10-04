@@ -356,7 +356,9 @@ function setupUI() {
   const openAuth = (message = "") => {
     modal.hidden = false;
     msg.textContent = message;
+    email.focus();
   };
+  window.ACTIVATE_OPEN_AUTH = openAuth;
 
   authBtn.onclick = openAuth;
   cartBtn.onclick = openCart;
@@ -421,7 +423,7 @@ function setupUI() {
   // En annuel, le gros prix est le montant réellement facturé en une fois.
   function syncActivatePricing() {
     const annualToggle = document.querySelector('.cyber-billing-switch button[aria-pressed="true"]');
-    const isAnnual = annualToggle?.textContent?.trim().toLowerCase() === "annuel";
+    const isAnnual = !!document.querySelector('.cyber-billing-switch button.is-active') && document.querySelector('.cyber-billing-switch button.is-active')?.textContent?.trim().toLowerCase() === "annuel";
     const plans = Array.from(document.querySelectorAll(".cyber-plan"));
     const annualPrices = [228, 428];
 
@@ -442,10 +444,14 @@ function setupUI() {
       if (isAnnual && annualPrice) {
         priceStrong.textContent = formatEUR(annualPrice);
         pricePeriod.textContent = "/ an";
+        const billing = card.querySelector(".cyber-plan-billing");
+        if (billing) billing.textContent = "Facturé en une fois";
         if (action) action.textContent = `Ajouter au panier — ${formatEUR(annualPrice)}`;
       } else if (monthlyPrice) {
         priceStrong.textContent = formatEUR(monthlyPrice);
         pricePeriod.textContent = "/ mois";
+        const billing = card.querySelector(".cyber-plan-billing");
+        if (billing) billing.textContent = "Facturé mensuellement";
         if (action) action.textContent = `Ajouter au panier — ${formatEUR(monthlyPrice)}`;
       }
     });
@@ -454,6 +460,37 @@ function setupUI() {
   syncActivatePricing();
   const pricingObserver = new MutationObserver(() => syncActivatePricing());
   pricingObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["aria-pressed", "class"] });
+  setInterval(syncActivatePricing, 250);
+
+  // Interception globale en phase capture : elle bloque aussi le handler React
+  // du site original, afin qu'un abonnement ne puisse jamais être ajouté sans compte.
+  if (!window.ACTIVATE_PLAN_CAPTURE_BOUND) {
+    window.ACTIVATE_PLAN_CAPTURE_BOUND = true;
+    document.addEventListener("click", (event) => {
+      const button = event.target.closest?.(".cyber-plan-action");
+      if (!button) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+
+      if (!auth.currentUser) {
+        window.ACTIVATE_OPEN_AUTH?.("Connecte-toi ou crée un compte avant d'ajouter une formule au panier.");
+        return;
+      }
+
+      const card = button.closest(".cyber-plan, .cyber-school-plan");
+      if (!card) return;
+      const name = card.querySelector(".cyber-plan-name, .cyber-school-plan h4")?.textContent?.trim() || "Abonnement Activate";
+      const annual = document.querySelector(".cyber-billing-switch button.is-active")?.textContent?.trim().toLowerCase() === "annuel";
+      const planIndex = Array.from(document.querySelectorAll(".cyber-plan")).indexOf(card);
+      const price = annual && [228,428][planIndex] ? [228,428][planIndex] : parseEuro(button.textContent) || parseEuro(card.querySelector(".cyber-plan-price strong")?.textContent);
+      const period = annual ? "annuel" : "mensuel";
+      if (!price) return;
+      const items = cart();
+      if (!items.some(x => x.name === name && x.period === period)) items.push({name, price, period});
+      saveCart(items);
+      openCart();
+    }, true);
+  }
 
   // Les boutons de chaque formule deviennent des ajouts au panier.
   // Le prix et la période sont lus AU MOMENT du clic afin que le mode
@@ -482,7 +519,7 @@ function setupUI() {
       }
 
       const annualToggle = document.querySelector('.cyber-billing-switch button[aria-pressed="true"]');
-      const isAnnual = annualToggle?.textContent?.trim().toLowerCase() === "annuel";
+      const isAnnual = !!document.querySelector('.cyber-billing-switch button.is-active') && document.querySelector('.cyber-billing-switch button.is-active')?.textContent?.trim().toLowerCase() === "annuel";
       const annualPrices = [228, 428];
       const planIndex = Array.from(document.querySelectorAll(".cyber-plan")).indexOf(card);
 
