@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, verifyBeforeUpdateEmail, updatePassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 
 const config = window.ACTIVATE_FIREBASE_CONFIG;
 
@@ -729,15 +729,99 @@ function setupUI() {
     }
   };
 
+  function closeActivateProfileMenu() {
+    document.getElementById("activate-profile-menu")?.remove();
+  }
+
+  function openActivateProfileMenu(user) {
+    closeActivateProfileMenu();
+    if (!user) return openAuth();
+    const menu = document.createElement("div");
+    menu.id = "activate-profile-menu";
+    menu.innerHTML = `
+      <div class="activate-profile-menu-backdrop"></div>
+      <div class="activate-profile-menu-card" role="dialog" aria-modal="true" aria-label="Compte">
+        <button class="activate-profile-close" type="button" aria-label="Fermer">×</button>
+        <div class="activate-profile-head">
+          <div class="activate-profile-avatar">${escapeHtml((user.email || "?").slice(0,1).toUpperCase())}</div>
+          <div><strong>${escapeHtml(user.email?.split("@")[0] || "Compte")}</strong><small>${escapeHtml(user.email || "")}</small></div>
+        </div>
+        <div class="activate-profile-actions">
+          <button type="button" data-profile-action="email">📧 Changer l’email</button>
+          <button type="button" data-profile-action="password">🔑 Changer le mot de passe</button>
+          <button type="button" data-profile-action="language">🌐 Langue</button>
+          <button type="button" data-profile-action="verification">✓ Vérification du compte</button>
+          <button type="button" data-profile-action="logout" class="danger">↪ Se déconnecter</button>
+        </div>
+        <p class="activate-profile-msg" aria-live="polite"></p>
+      </div>`;
+    const style = document.createElement("style");
+    style.id = "activate-profile-menu-style";
+    style.textContent = `
+      #activate-profile-menu{position:fixed;inset:0;z-index:99999;font-family:Inter,system-ui,sans-serif}
+      .activate-profile-menu-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(5px)}
+      .activate-profile-menu-card{position:absolute;top:72px;right:22px;width:min(380px,calc(100vw - 30px));padding:22px;border:1px solid rgba(255,52,41,.5);border-radius:16px;background:#0b0b0d;color:#fff;box-shadow:0 20px 70px rgba(0,0,0,.55)}
+      .activate-profile-close{position:absolute;right:12px;top:9px;border:0;background:transparent;color:#aaa;font-size:28px;cursor:pointer}
+      .activate-profile-head{display:flex;align-items:center;gap:12px;padding:4px 30px 18px 0;border-bottom:1px solid #29292d}
+      .activate-profile-avatar{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:#ff3429;color:#fff;font-weight:800}
+      .activate-profile-head strong,.activate-profile-head small{display:block}.activate-profile-head small{color:#999;margin-top:3px;font-size:12px;overflow:hidden;text-overflow:ellipsis;max-width:280px}
+      .activate-profile-actions{display:grid;gap:8px;margin-top:16px}.activate-profile-actions button{padding:12px 13px;border:1px solid #29292d;border-radius:10px;background:#151519;color:#fff;text-align:left;cursor:pointer}.activate-profile-actions button:hover{border-color:#ff3429}.activate-profile-actions .danger{color:#ff7068}.activate-profile-msg{color:#aaa;font-size:13px;min-height:18px;margin:14px 2px 0}
+    `;
+    document.head.appendChild(style);
+    document.body.appendChild(menu);
+    const msg = menu.querySelector(".activate-profile-msg");
+    menu.querySelector(".activate-profile-close").onclick = closeActivateProfileMenu;
+    menu.querySelector(".activate-profile-menu-backdrop").onclick = closeActivateProfileMenu;
+    menu.querySelector('[data-profile-action="email"]').onclick = async () => {
+      const next = prompt("Nouvelle adresse e-mail :", user.email || "");
+      if (!next || next.trim().toLowerCase() === (user.email || "").toLowerCase()) return;
+      try {
+        await verifyBeforeUpdateEmail(user, next.trim());
+        msg.textContent = "Un e-mail de vérification a été envoyé à la nouvelle adresse.";
+      } catch (e) {
+        msg.textContent = e.code === "auth/requires-recent-login" ? "Reconnecte-toi puis réessaie pour changer l’e-mail." : (e.code?.replace("auth/", "") || "Impossible de changer l’e-mail.");
+      }
+    };
+    menu.querySelector('[data-profile-action="password"]').onclick = async () => {
+      const next = prompt("Nouveau mot de passe (6 caractères minimum) :");
+      if (!next) return;
+      if (next.length < 6) { msg.textContent = "Le mot de passe doit contenir au moins 6 caractères."; return; }
+      try {
+        await updatePassword(user, next);
+        msg.textContent = "Mot de passe modifié avec succès.";
+      } catch (e) {
+        if (e.code === "auth/requires-recent-login") {
+          if (confirm("La session doit être récente. Envoyer un e-mail de réinitialisation ?")) {
+            await sendPasswordResetEmail(auth, user.email);
+            msg.textContent = "E-mail de réinitialisation envoyé.";
+          }
+        } else if (e.code === "auth/operation-not-allowed") {
+          msg.textContent = "Ce compte n’utilise pas un mot de passe (ex. connexion Google).";
+        } else msg.textContent = e.code?.replace("auth/", "") || "Impossible de changer le mot de passe.";
+      }
+    };
+    menu.querySelector('[data-profile-action="language"]').onclick = () => {
+      const choices = ["fr", "en", "tr"];
+      const current = localStorage.getItem(`activate_lang_${user.uid}`) || "fr";
+      const value = prompt("Langue (fr / en / tr) :", current)?.trim().toLowerCase();
+      if (!value || !choices.includes(value)) { if (value) msg.textContent = "Langue invalide. Utilise fr, en ou tr."; return; }
+      localStorage.setItem(`activate_lang_${user.uid}`, value);
+      msg.textContent = "Langue enregistrée. Recharge la page pour appliquer toutes les traductions.";
+    };
+    menu.querySelector('[data-profile-action="verification"]').onclick = async () => {
+      if (user.emailVerified) msg.textContent = "Ton adresse e-mail est déjà vérifiée.";
+      else { try { const { sendEmailVerification } = await import("https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js"); await sendEmailVerification(user); msg.textContent = "E-mail de vérification envoyé."; } catch (e) { msg.textContent = e.code?.replace("auth/", "") || "Impossible d’envoyer l’e-mail."; } }
+    };
+    menu.querySelector('[data-profile-action="logout"]').onclick = async () => { closeActivateProfileMenu(); await signOut(auth); };
+  }
+
   onAuthStateChanged(auth, async (user) => {
     authBtn.textContent = user
       ? (user.email?.split("@")[0] || "Compte")
       : "Connexion";
 
     authBtn.onclick = user
-      ? async () => {
-          if (confirm("Se déconnecter ?")) await signOut(auth);
-        }
+      ? () => openActivateProfileMenu(user)
       : openAuth;
 
     window.ACTIVATE_CURRENT_USER = user || null;
