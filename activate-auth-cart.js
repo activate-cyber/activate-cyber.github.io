@@ -106,7 +106,7 @@ function parseEuro(text) {
 
 
   async function getActivateApiUrl() {
-    return String(window.ACTIVATE_API_URL || "https://salon-railroad-third-conferencing.trycloudflare.com/api/site/settings").replace(/\/$/, "");
+    return String(window.ACTIVATE_API_URL || "https://activate-cyber.websr.gg").replace(/\/$/, "");
   }
 
   async function apiJson(path, options = {}) {
