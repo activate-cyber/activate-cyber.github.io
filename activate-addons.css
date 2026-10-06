@@ -366,3 +366,5 @@
 .activate-cart-promo-row input{flex:1;min-width:0;background:#111;color:#fff;border:1px solid #333;border-radius:6px;padding:10px}
 .activate-cart-promo-row button{background:#fff;color:#000;border:0;border-radius:6px;padding:10px 14px;font-weight:700;cursor:pointer}
 #activate-promo-message{font-size:12px;color:#aaa;margin:8px 0 0}
+
+.activate-admin-coupon-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:14px;margin-bottom:12px;border:1px solid rgba(255,255,255,.1);border-radius:10px}.activate-admin-coupon-summary strong{font-weight:700}.activate-admin-coupon{margin-bottom:14px}

@@ -44,7 +44,7 @@ function getSiteSettings() {
 function getCoupon(code) {
   const value = String(code || "").trim().toUpperCase();
   const coupons = Array.isArray(getSiteSettings().coupons) ? getSiteSettings().coupons : [];
-  return coupons.find(c => String(c.code || "").trim().toUpperCase() === value && c.active !== false);
+  return coupons.find(c => String(c.code || "").trim().toUpperCase() === value);
 }
 function couponDiscount(coupon, subtotal) {
   if (!coupon || subtotal <= 0) return 0;
@@ -302,28 +302,24 @@ function parseEuro(text) {
 
       <section class="activate-admin-section">
         <h3>Codes promo</h3>
-        <p class="activate-admin-help">Crée, modifie ou désactive les codes utilisables dans le panier.</p>
+        <p class="activate-admin-help">Gère tes codes promo. Chaque coupon affiche son nom, sa date de fin et sa réduction.</p>
         <div class="activate-admin-coupons">
           ${settings.coupons.length ? settings.coupons.map((c, i) => `
             <div class="activate-admin-coupon" data-coupon-row="${i}">
+              <div class="activate-admin-coupon-summary">
+                <div><strong>Nom :</strong> ${escapeHtml(c.code || "Sans nom")}</div>
+                <div><strong>Fin :</strong> ${c.expiresAt ? new Date(c.expiresAt).toLocaleDateString("fr-FR") : "Aucune"}</div>
+                <div><strong>Coupon :</strong> ${String(c.type || "percent").toLowerCase() === "fixed" ? formatEUR(c.value) : `${Number(c.value) || 0} %`}</div>
+              </div>
               <div class="activate-admin-row">
-                <label>Code<input data-coupon-code="${i}" value="${escapeHtml(c.code || "")}" placeholder="PROMO20"></label>
+                <label>Nom<input data-coupon-code="${i}" value="${escapeHtml(c.code || "")}" placeholder="Activate"></label>
                 <label>Type<select data-coupon-type="${i}">
                   <option value="percent" ${(c.type || "percent") === "percent" ? "selected" : ""}>Pourcentage</option>
                   <option value="fixed" ${c.type === "fixed" ? "selected" : ""}>Montant fixe</option>
                 </select></label>
-                <label>Valeur<input data-coupon-value="${i}" type="number" min="0" step="0.01" value="${Number(c.value) || 0}"></label>
-                <label>Minimum<input data-coupon-min="${i}" type="number" min="0" step="0.01" value="${Number(c.minAmount) || 0}"></label>
-                <label>Actif<select data-coupon-active="${i}">
-                  <option value="true" ${c.active !== false ? "selected" : ""}>Oui</option>
-                  <option value="false" ${c.active === false ? "selected" : ""}>Non</option>
-                </select></label>
+                <label>Réduction<input data-coupon-value="${i}" type="number" min="0" step="0.01" value="${Number(c.value) || 0}"></label>
+                <label>Fin<input data-coupon-expire="${i}" type="date" value="${escapeHtml(c.expiresAt ? String(c.expiresAt).slice(0,10) : "")}"></label>
                 <button type="button" class="activate-admin-delete" data-coupon-delete="${i}">Supprimer</button>
-              </div>
-              <div class="activate-admin-row">
-                <label>Début<input data-coupon-start="${i}" type="datetime-local" value="${escapeHtml(c.startsAt ? String(c.startsAt).slice(0,16) : "")}"></label>
-                <label>Expiration<input data-coupon-expire="${i}" type="datetime-local" value="${escapeHtml(c.expiresAt ? String(c.expiresAt).slice(0,16) : "")}"></label>
-                <label>Utilisations max<input data-coupon-max="${i}" type="number" min="0" step="1" value="${Number(c.maxUses) || 0}"></label>
               </div>
             </div>`).join("") : `<p class="activate-admin-empty">Aucun code promo configuré.</p>`}
         </div>
@@ -339,7 +335,7 @@ function parseEuro(text) {
     `;
 
     form.querySelector("#activate-admin-add-coupon")?.addEventListener("click", () => {
-      settings.coupons.push({code:"", type:"percent", value:10, minAmount:0, active:true, startsAt:"", expiresAt:"", maxUses:0});
+      settings.coupons.push({code:"", type:"percent", value:10, expiresAt:""});
       openAdminPanel();
     });
 
@@ -371,11 +367,7 @@ function parseEuro(text) {
             code: form.querySelector(`[data-coupon-code="${i}"]`).value.trim().toUpperCase(),
             type: form.querySelector(`[data-coupon-type="${i}"]`).value,
             value: Number(form.querySelector(`[data-coupon-value="${i}"]`).value) || 0,
-            minAmount: Number(form.querySelector(`[data-coupon-min="${i}"]`).value) || 0,
-            active: form.querySelector(`[data-coupon-active="${i}"]`).value === "true",
-            startsAt: form.querySelector(`[data-coupon-start="${i}"]`).value || "",
-            expiresAt: form.querySelector(`[data-coupon-expire="${i}"]`).value || "",
-            maxUses: Number(form.querySelector(`[data-coupon-max="${i}"]`).value) || 0
+            expiresAt: form.querySelector(`[data-coupon-expire="${i}"]`).value || ""
           })).filter(c => c.code),
           about: {
             title: document.getElementById("admin-about-title").value,
