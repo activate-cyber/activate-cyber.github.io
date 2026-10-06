@@ -4,7 +4,7 @@ import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, on
 const config = window.ACTIVATE_FIREBASE_CONFIG;
 
 // API Activate
-window.ACTIVATE_API_URL = "https://salon-railroad-third-conferencing.trycloudflare.com";
+window.ACTIVATE_API_URL = "https://activate-cyber.websr.gg";
 if (!config) throw new Error("Configuration Firebase Activate introuvable.");
 
 const app = getApps().length ? getApps()[0] : initializeApp(config);
