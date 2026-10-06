@@ -38,7 +38,7 @@ function getSiteSettings() {
       { sku: "activate_basic", name: "Standard", monthlyPrice: 20.99, annualPrice: 228 },
       { sku: "activate_pro", name: "Accès anticipé", monthlyPrice: 42.99, annualPrice: 428 }
     ],
-    coupons: []
+    coupons: [{ name: "Réduction", code: "-10%", type: "percent", value: 10, expiresAt: "" }]
   };
 }
 function getCoupon(code) {
@@ -281,7 +281,7 @@ function parseEuro(text) {
         { sku: "activate_basic", name: "Standard", monthlyPrice: 20.99, annualPrice: 228 },
         { sku: "activate_pro", name: "Accès anticipé", monthlyPrice: 42.99, annualPrice: 428 }
       ],
-      coupons: [],
+      coupons: [{ name: "Réduction", code: "-10%", type: "percent", value: 10, expiresAt: "" }],
       about: { title: "", text1: "", text2: "" }
     };
     if (!Array.isArray(settings.coupons)) settings.coupons = [];
@@ -302,28 +302,36 @@ function parseEuro(text) {
 
       <section class="activate-admin-section">
         <h3>Codes promo</h3>
-        <p class="activate-admin-help">Gère tes codes promo. Chaque coupon affiche son nom, sa date de fin et sa réduction.</p>
-        <div class="activate-admin-coupons">
-          ${settings.coupons.length ? settings.coupons.map((c, i) => `
-            <div class="activate-admin-coupon" data-coupon-row="${i}">
-              <div class="activate-admin-coupon-summary">
-                <div><strong>Nom :</strong> ${escapeHtml(c.code || "Sans nom")}</div>
-                <div><strong>Fin :</strong> ${c.expiresAt ? new Date(c.expiresAt).toLocaleDateString("fr-FR") : "Aucune"}</div>
-                <div><strong>Coupon :</strong> ${String(c.type || "percent").toLowerCase() === "fixed" ? formatEUR(c.value) : `${Number(c.value) || 0} %`}</div>
-              </div>
-              <div class="activate-admin-row">
-                <label>Nom<input data-coupon-code="${i}" value="${escapeHtml(c.code || "")}" placeholder="Activate"></label>
-                <label>Type<select data-coupon-type="${i}">
-                  <option value="percent" ${(c.type || "percent") === "percent" ? "selected" : ""}>Pourcentage</option>
-                  <option value="fixed" ${c.type === "fixed" ? "selected" : ""}>Montant fixe</option>
-                </select></label>
-                <label>Réduction<input data-coupon-value="${i}" type="number" min="0" step="0.01" value="${Number(c.value) || 0}"></label>
-                <label>Fin<input data-coupon-expire="${i}" type="date" value="${escapeHtml(c.expiresAt ? String(c.expiresAt).slice(0,10) : "")}"></label>
-                <button type="button" class="activate-admin-delete" data-coupon-delete="${i}">Supprimer</button>
-              </div>
-            </div>`).join("") : `<p class="activate-admin-empty">Aucun code promo configuré.</p>`}
+        <div class="activate-admin-tabs">
+          <button type="button" class="activate-link-btn" id="activate-codes-created-tab">Codes créés</button>
+          <button type="button" class="activate-link-btn" id="activate-code-create-tab">Créer un code</button>
         </div>
-        <button type="button" id="activate-admin-add-coupon" class="activate-link-btn">+ Ajouter un code promo</button>
+        <div id="activate-codes-created-view">
+          <p class="activate-admin-help">Les codes déjà créés peuvent uniquement être supprimés.</p>
+          <div class="activate-admin-coupons">
+            ${settings.coupons.length ? settings.coupons.map((c, i) => `
+              <div class="activate-admin-coupon" data-coupon-row="${i}">
+                <div class="activate-admin-coupon-summary">
+                  <div><strong>Nom :</strong> ${escapeHtml(c.name || c.code || "Sans nom")}</div>
+                  <div><strong>Code :</strong> ${escapeHtml(c.code || "")}</div>
+                  <div><strong>Fin :</strong> ${c.expiresAt ? new Date(c.expiresAt).toLocaleDateString("fr-FR") : "Aucune"}</div>
+                  <div><strong>Coupon :</strong> ${String(c.type || "percent").toLowerCase() === "fixed" ? formatEUR(c.value) : `${Number(c.value) || 0} %`}</div>
+                </div>
+                <button type="button" class="activate-admin-delete" data-coupon-delete="${i}">Supprimer</button>
+              </div>`).join("") : `<p class="activate-admin-empty">Aucun code promo configuré.</p>`}
+          </div>
+        </div>
+        <div id="activate-code-create-view" hidden>
+          <p class="activate-admin-help">Crée un nouveau code. Après création, il apparaîtra dans « Codes créés ».</p>
+          <div class="activate-admin-row">
+            <label>Nom<input id="activate-new-coupon-name" placeholder="Activate"></label>
+            <label>Code<input id="activate-new-coupon-code" placeholder="ACTIVATE10"></label>
+            <label>Type<select id="activate-new-coupon-type"><option value="percent">Pourcentage</option><option value="fixed">Montant fixe</option></select></label>
+            <label>Réduction<input id="activate-new-coupon-value" type="number" min="0" step="0.01" value="10"></label>
+            <label>Fin<input id="activate-new-coupon-expire" type="date"></label>
+          </div>
+          <button type="button" id="activate-admin-create-coupon" class="activate-main-btn">Créer le code</button>
+        </div>
       </section>
 
       <section class="activate-admin-section">
@@ -334,10 +342,10 @@ function parseEuro(text) {
       </section>
     `;
 
-    form.querySelector("#activate-admin-add-coupon")?.addEventListener("click", () => {
-      settings.coupons.push({code:"", type:"percent", value:10, expiresAt:""});
-      openAdminPanel();
-    });
+    const createdView = form.querySelector("#activate-codes-created-view");
+    const createView = form.querySelector("#activate-code-create-view");
+    form.querySelector("#activate-codes-created-tab")?.addEventListener("click", () => { createdView.hidden = false; createView.hidden = true; });
+    form.querySelector("#activate-code-create-tab")?.addEventListener("click", () => { createdView.hidden = true; createView.hidden = false; });
 
     form.querySelectorAll("[data-coupon-delete]").forEach(btn => {
       btn.addEventListener("click", () => {
@@ -345,6 +353,21 @@ function parseEuro(text) {
         window.ACTIVATE_SITE_SETTINGS = settings;
         openAdminPanel();
       });
+    });
+
+    form.querySelector("#activate-admin-create-coupon")?.addEventListener("click", () => {
+      const name = form.querySelector("#activate-new-coupon-name")?.value.trim();
+      const code = form.querySelector("#activate-new-coupon-code")?.value.trim().toUpperCase();
+      const type = form.querySelector("#activate-new-coupon-type")?.value || "percent";
+      const value = Number(form.querySelector("#activate-new-coupon-value")?.value) || 0;
+      const expiresAt = form.querySelector("#activate-new-coupon-expire")?.value || "";
+      if (!name || !code || value <= 0) return;
+      if (type === "percent" && value > 100) return;
+      if (settings.coupons.some(c => String(c.code || "").toUpperCase() === code)) return;
+      settings.coupons.push({ name, code, type, value, expiresAt });
+      window.ACTIVATE_SITE_SETTINGS = settings;
+      openAdminPanel();
+      form.querySelector("#activate-codes-created-tab")?.click();
     });
 
     const msg = document.getElementById("activate-admin-message");
@@ -363,12 +386,7 @@ function parseEuro(text) {
             monthlyPrice: Number(form.querySelector(`[data-admin-monthly="${i}"]`).value),
             annualPrice: Number(form.querySelector(`[data-admin-annual="${i}"]`).value)
           })),
-          coupons: Array.from(form.querySelectorAll("[data-coupon-code]")).map((_, i) => ({
-            code: form.querySelector(`[data-coupon-code="${i}"]`).value.trim().toUpperCase(),
-            type: form.querySelector(`[data-coupon-type="${i}"]`).value,
-            value: Number(form.querySelector(`[data-coupon-value="${i}"]`).value) || 0,
-            expiresAt: form.querySelector(`[data-coupon-expire="${i}"]`).value || ""
-          })).filter(c => c.code),
+          coupons: settings.coupons.map(c => ({ ...c, code: String(c.code || "").trim().toUpperCase() })).filter(c => c.code),
           about: {
             title: document.getElementById("admin-about-title").value,
             text1: document.getElementById("admin-about-text1").value,
