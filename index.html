@@ -18,10 +18,162 @@
     <script type="module" crossorigin src="./assets/index-BBRzz54C.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/index-sEfk9t9i.css">
     <link rel="stylesheet" href="./activate-addons.css?v=21">
-  </head>
+  
+<style>
+#activate-language-selector {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 99999;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #111;
+  color: #fff;
+  border: 1px solid #333;
+  font: 14px system-ui, sans-serif;
+}
+#activate-language-selector select {
+  background: #1b1b1b;
+  color: #fff;
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+</style>
+
+</head>
   <body>
     <div id="root"></div>
     <script src="./firebase-config.js"></script>
     <script type="module" src="./activate-auth-cart.js?v=23"></script>
-  </body>
+  
+<script>
+/* Activate V27 — language selector */
+window.ACTIVATE_LANG = localStorage.getItem("activate_language") || "fr";
+window.ACTIVATE_I18N = {"fr": {"admin_account": "Compte", "admin_emails": "Emails administrateurs", "language": "Langue", "change_password": "Changer le mot de passe", "verification_codes": "Codes de vérification", "french": "Français", "english": "English", "turkish": "Türkçe"}, "en": {"admin_account": "Account", "admin_emails": "Administrator emails", "language": "Language", "change_password": "Change password", "verification_codes": "Verification codes", "french": "French", "english": "English", "turkish": "Turkish"}, "tr": {"admin_account": "Hesap", "admin_emails": "Yönetici e-postaları", "language": "Dil", "change_password": "Şifreyi değiştir", "verification_codes": "Doğrulama kodları", "french": "Français", "english": "English", "turkish": "Türkçe"}};
+
+window.activateSetLanguage = function(lang) {
+  if (!["fr","en","tr"].includes(lang)) lang = "fr";
+  window.ACTIVATE_LANG = lang;
+  localStorage.setItem("activate_language", lang);
+  document.documentElement.lang = lang === "tr" ? "tr" : lang;
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    const key = el.getAttribute("data-i18n");
+    const value = window.ACTIVATE_I18N[lang]?.[key];
+    if (value) el.textContent = value;
+  });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach(el => {
+    const key = el.getAttribute("data-i18n-placeholder");
+    const value = window.ACTIVATE_I18N[lang]?.[key];
+    if (value) el.placeholder = value;
+  });
+};
+
+window.activateLanguageSelector = function() {
+  const existing = document.getElementById("activate-language-selector");
+  if (existing) return;
+  const wrap = document.createElement("div");
+  wrap.id = "activate-language-selector";
+  wrap.innerHTML = `
+    <label data-i18n="language">Langue</label>
+    <select aria-label="Language">
+      <option value="fr">Français</option>
+      <option value="en">English</option>
+      <option value="tr">Türkçe</option>
+    </select>`;
+  const select = wrap.querySelector("select");
+  select.value = window.ACTIVATE_LANG;
+  select.addEventListener("change", e => window.activateSetLanguage(e.target.value));
+  document.body.appendChild(wrap);
+  window.activateSetLanguage(window.ACTIVATE_LANG);
+};
+
+document.addEventListener("DOMContentLoaded", () => {
+  window.activateLanguageSelector();
+});
+</script>
+
+
+<script>
+/* Activate V28 — account language */
+(function () {
+  const LANGS = ["fr", "en", "tr"];
+  const KEY_PREFIX = "activate_account_language:";
+
+  function currentUser() {
+    return window.ACTIVATE_CURRENT_USER || window.activateCurrentUser || null;
+  }
+
+  function userKey(user) {
+    return user && (user.uid || user.email)
+      ? KEY_PREFIX + (user.uid || user.email).toLowerCase()
+      : "activate_language_guest";
+  }
+
+  function getLanguage(user) {
+    const saved = localStorage.getItem(userKey(user));
+    if (LANGS.includes(saved)) return saved;
+    const global = localStorage.getItem("activate_language");
+    return LANGS.includes(global) ? global : "fr";
+  }
+
+  window.activateAccountLanguage = function (lang) {
+    if (!LANGS.includes(lang)) lang = "fr";
+    const user = currentUser();
+    localStorage.setItem(userKey(user), lang);
+    localStorage.setItem("activate_language", lang);
+    document.documentElement.lang = lang;
+    if (typeof window.activateSetLanguage === "function") {
+      window.activateSetLanguage(lang);
+    }
+    window.dispatchEvent(new CustomEvent("activate-language-changed", {
+      detail: { language: lang }
+    }));
+  };
+
+  window.activateLoadAccountLanguage = function () {
+    const lang = getLanguage(currentUser());
+    localStorage.setItem("activate_language", lang);
+    document.documentElement.lang = lang;
+    if (typeof window.activateSetLanguage === "function") {
+      window.activateSetLanguage(lang);
+    }
+    return lang;
+  };
+
+  // Expose a small selector for Account.
+  window.activateCreateAccountLanguageSelector = function (container) {
+    if (!container || container.querySelector("#activate-account-language")) return;
+    const wrap = document.createElement("div");
+    wrap.innerHTML = `
+      <label for="activate-account-language">Langue</label>
+      <select id="activate-account-language">
+        <option value="fr">Français</option>
+        <option value="en">English</option>
+        <option value="tr">Türkçe</option>
+      </select>
+    `;
+    container.appendChild(wrap);
+    const select = wrap.querySelector("select");
+    select.value = getLanguage(currentUser());
+    select.addEventListener("change", () => {
+      window.activateAccountLanguage(select.value);
+    });
+  };
+
+  // Called after authentication/account creation.
+  window.activateSaveNewAccountLanguage = function (lang) {
+    window.activateAccountLanguage(lang || "fr");
+  };
+
+  document.addEventListener("DOMContentLoaded", () => {
+    window.activateLoadAccountLanguage();
+  });
+})();
+</script>
+
+</body>
 </html>
