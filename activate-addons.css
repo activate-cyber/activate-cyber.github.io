@@ -345,3 +345,24 @@
 /* Administration Activate */
 .activate-admin-card{width:min(760px,94vw);max-height:88vh;overflow:auto;padding:30px;border-radius:18px;background:#0b0b0d;border:1px solid rgba(255,52,41,.35);box-shadow:0 30px 100px rgba(0,0,0,.55);color:#fff;position:relative}
 .activate-admin-card h2{margin:.15rem 0 1rem}.activate-admin-card h3{margin:1.4rem 0 .7rem}.activate-admin-plan{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:10px;margin-bottom:10px}.activate-admin-card input,.activate-admin-card textarea{width:100%;box-sizing:border-box;background:#121216;color:#fff;border:1px solid #333;border-radius:9px;padding:10px;margin-top:5px}.activate-admin-card textarea{min-height:90px;resize:vertical}.activate-admin-card label{display:block;margin:10px 0}.activate-admin-note{opacity:.75}.activate-admin-btn{border-color:rgba(255,52,41,.6)!important;color:#fff!important}.activate-admin-btn:hover{background:rgba(255,52,41,.12)}#activate-admin-message{min-height:1.3em;margin-top:10px}@media(max-width:650px){.activate-admin-plan{grid-template-columns:1fr}.activate-admin-card{padding:22px}}
+
+/* Admin Activate v2 + codes promo */
+.activate-admin-v2-card{width:min(1100px,94vw);max-height:90vh;overflow:auto}
+.activate-admin-section{margin:18px 0;padding:18px;border:1px solid #2a2a2a;border-radius:10px;background:#090909}
+.activate-admin-section h3{margin:0 0 8px}
+.activate-admin-help,.activate-admin-empty{color:#aaa;font-size:13px}
+.activate-admin-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin:10px 0}
+.activate-admin-row input,.activate-admin-row select,.activate-admin-section>label input,.activate-admin-section>label textarea{width:100%;box-sizing:border-box;background:#111;color:#fff;border:1px solid #333;border-radius:6px;padding:10px}
+.activate-admin-row>input{flex:1 1 170px}
+.activate-admin-row label{flex:1 1 150px;color:#aaa;font-size:12px}
+.activate-admin-row label input,.activate-admin-row label select{margin-top:5px}
+.activate-admin-section>label{display:block;color:#aaa;font-size:12px;margin:10px 0}
+.activate-admin-section>label textarea{min-height:90px;resize:vertical}
+.activate-admin-coupon{border-top:1px solid #252525;padding:12px 0}
+.activate-admin-delete{background:#241010;color:#ff6b63;border:1px solid #5b2420;border-radius:6px;padding:10px 12px;cursor:pointer}
+.activate-cart-promo{margin:16px 0;padding:12px;border:1px solid #292929;border-radius:8px}
+.activate-cart-promo label{display:block;font-size:13px;color:#aaa;margin-bottom:7px}
+.activate-cart-promo-row{display:flex;gap:8px}
+.activate-cart-promo-row input{flex:1;min-width:0;background:#111;color:#fff;border:1px solid #333;border-radius:6px;padding:10px}
+.activate-cart-promo-row button{background:#fff;color:#000;border:0;border-radius:6px;padding:10px 14px;font-weight:700;cursor:pointer}
+#activate-promo-message{font-size:12px;color:#aaa;margin:8px 0 0}

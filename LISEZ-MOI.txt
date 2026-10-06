@@ -1,4 +1,14 @@
 Activate — site statique
 
-Le dossier contient la version compilée du site et peut être déployé sur un hébergement statique.
-Publiez le contenu de ce dossier à la racine du site.
+Cette archive contient la version complète du site Activate.
+
+Modifications incluses :
+- API configurée sur https://activate-cyber.websr.gg
+- nouveau panel Admin intégré
+- gestion des prix mensuels et annuels
+- gestion des codes promo dans le panel Admin
+- application des codes promo dans le panier
+- recalcul du prix du panier après modification des prix
+- version des fichiers frontend mise à jour
+
+Déployez le contenu de cette archive à la racine du site.

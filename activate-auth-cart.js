@@ -21,10 +21,67 @@ const waitForApp = (fn) => {
   }
 };
 
-function cart() { try { return JSON.parse(localStorage.getItem(CART_KEY) || "[]"); } catch { return []; } }
-function saveCart(items) { localStorage.setItem(CART_KEY, JSON.stringify(items)); updateCartBadge(); }
+function cart() {
+  try { return JSON.parse(localStorage.getItem(CART_KEY) || "[]"); } catch { return []; }
+}
+function saveCart(items) {
+  localStorage.setItem(CART_KEY, JSON.stringify(items));
+  updateCartBadge();
+}
 function updateCartBadge() {
-  const b=document.getElementById("activate-cart-count"); if (b) b.textContent=String(cart().length);
+  const b=document.getElementById("activate-cart-count");
+  if (b) b.textContent=String(cart().length);
+}
+function getSiteSettings() {
+  return window.ACTIVATE_SITE_SETTINGS || {
+    plans: [
+      { sku: "activate_basic", name: "Standard", monthlyPrice: 20.99, annualPrice: 228 },
+      { sku: "activate_pro", name: "Accès anticipé", monthlyPrice: 42.99, annualPrice: 428 }
+    ],
+    coupons: []
+  };
+}
+function getCoupon(code) {
+  const value = String(code || "").trim().toUpperCase();
+  const coupons = Array.isArray(getSiteSettings().coupons) ? getSiteSettings().coupons : [];
+  return coupons.find(c => String(c.code || "").trim().toUpperCase() === value && c.active !== false);
+}
+function couponDiscount(coupon, subtotal) {
+  if (!coupon || subtotal <= 0) return 0;
+  const now = Date.now();
+  if (coupon.expiresAt && new Date(coupon.expiresAt).getTime() < now) return 0;
+  if (coupon.startsAt && new Date(coupon.startsAt).getTime() > now) return 0;
+  if (coupon.minAmount && subtotal < Number(coupon.minAmount)) return 0;
+  if (String(coupon.type).toLowerCase() === "fixed") return Math.min(subtotal, Math.max(0, Number(coupon.value) || 0));
+  return Math.min(subtotal, subtotal * (Math.max(0, Number(coupon.value) || 0) / 100));
+}
+function cartPricing() {
+  const items = cart();
+  const subtotal = items.reduce((sum, x) => sum + Number(x.price || 0), 0);
+  const code = String(localStorage.getItem("activate_coupon_v1") || "").trim().toUpperCase();
+  const coupon = getCoupon(code);
+  const discount = coupon ? couponDiscount(coupon, subtotal) : 0;
+  return { subtotal, coupon, code: coupon ? code : "", discount, total: Math.max(0, subtotal - discount) };
+}
+function reconcileCartPrices() {
+  const settings = getSiteSettings();
+  const plans = Array.isArray(settings.plans) ? settings.plans : [];
+  let changed = false;
+  const items = cart().map(item => {
+    const plan = item.sku ? plans.find(p => p.sku === item.sku) :
+      plans.find(p => p.name === item.name);
+    if (!plan) return item;
+    const annual = item.period === "annuel";
+    const nextPrice = Number(annual ? plan.annualPrice : plan.monthlyPrice);
+    if (nextPrice > 0 && Number(item.price) !== nextPrice) {
+      changed = true;
+      return {...item, price: nextPrice, sku: plan.sku};
+    }
+    if (!item.sku) { changed = true; return {...item, sku: plan.sku}; }
+    return item;
+  });
+  if (changed) saveCart(items);
+  return items;
 }
 function addToCart(name, price) {
   const items=cart();
@@ -35,8 +92,9 @@ function openCart() {
   const box = document.getElementById("activate-cart-modal");
   if (!box) return;
 
+  reconcileCartPrices();
   const items = cart();
-  const total = items.reduce((sum, x) => sum + Number(x.price || 0), 0);
+  const pricing = cartPricing();
 
   box.innerHTML = `
     <div class="activate-modal-card activate-cart-card">
@@ -53,14 +111,21 @@ function openCart() {
                 </div>
               `).join("")}
             </div>
-            <div class="activate-cart-total">
-              <span>Total</span>
-              <strong>${formatEUR(total)}</strong>
+            <div class="activate-cart-promo">
+              <label for="activate-promo-code">Code promo</label>
+              <div class="activate-cart-promo-row">
+                <input id="activate-promo-code" type="text" maxlength="40" placeholder="EXEMPLE20" value="${escapeHtml(pricing.code)}">
+                <button id="activate-promo-apply" type="button">Appliquer</button>
+              </div>
+              <p id="activate-promo-message"></p>
             </div>
-            <a class="activate-paypal-button" href="${paypalLink(total)}" target="_blank" rel="noopener noreferrer">
-              Payer ${formatEUR(total)} avec PayPal
+            <div class="activate-cart-total"><span>Sous-total</span><strong>${formatEUR(pricing.subtotal)}</strong></div>
+            ${pricing.discount > 0 ? `<div class="activate-cart-total"><span>Réduction ${escapeHtml(pricing.coupon.code)}</span><strong>−${formatEUR(pricing.discount)}</strong></div>` : ""}
+            <div class="activate-cart-total"><span>Total</span><strong>${formatEUR(pricing.total)}</strong></div>
+            <a class="activate-paypal-button" href="${paypalLink(pricing.total)}" target="_blank" rel="noopener noreferrer">
+              Payer ${formatEUR(pricing.total)} avec PayPal
             </a>
-            <p class="activate-cart-note">Le paiement s’ouvre sur PayPal avec le montant affiché.</p>`
+            <p class="activate-cart-note">Le montant affiché est recalculé à partir des prix et codes promo actuellement configurés.</p>`
           : `<p>Ton panier est vide.</p>`
       }
       <a class="activate-dashboard-back" href="https://activate-cyber.github.io/#dashboard">Ouvrir le Dashboard</a>
@@ -68,8 +133,30 @@ function openCart() {
   `;
 
   box.hidden = false;
-  box.querySelector("[data-close-cart]")?.addEventListener("click", () => {
-    box.hidden = true;
+  box.querySelector("[data-close-cart]")?.addEventListener("click", () => { box.hidden = true; });
+
+  box.querySelector("#activate-promo-apply")?.addEventListener("click", () => {
+    const input = box.querySelector("#activate-promo-code");
+    const message = box.querySelector("#activate-promo-message");
+    const code = String(input?.value || "").trim().toUpperCase();
+    if (!code) {
+      localStorage.removeItem("activate_coupon_v1");
+      openCart();
+      return;
+    }
+    const coupon = getCoupon(code);
+    const subtotal = cartPricing().subtotal;
+    if (!coupon) {
+      message.textContent = "Code promo invalide ou inactif.";
+      return;
+    }
+    const discount = couponDiscount(coupon, subtotal);
+    if (discount <= 0) {
+      message.textContent = "Ce code promo ne peut pas être appliqué à ce panier.";
+      return;
+    }
+    localStorage.setItem("activate_coupon_v1", code);
+    openCart();
   });
 
   box.querySelectorAll("[data-remove]").forEach(btn => {
@@ -106,7 +193,7 @@ function parseEuro(text) {
 
 
   async function getActivateApiUrl() {
-    return String(window.ACTIVATE_API_URL || "https://activate-cyber.websr.gg").replace(/\/$/, "");
+    return String(window.ACTIVATE_API_URL || "").replace(/\/$/, "");
   }
 
   async function apiJson(path, options = {}) {
@@ -175,40 +262,95 @@ function parseEuro(text) {
     if (!overlay) {
       document.body.insertAdjacentHTML("beforeend", `
         <div id="activate-admin-overlay" class="activate-overlay" hidden>
-          <div class="activate-admin-card">
+          <div class="activate-admin-card activate-admin-v2-card">
             <button class="activate-close" id="activate-admin-close" type="button">×</button>
             <p class="cyber-eyebrow"><span></span> ADMIN ACTIVATE</p>
-            <h2>Administration</h2>
-            <p class="activate-admin-note">Modifie les prix et le texte « À propos ». Les changements sont enregistrés côté serveur.</p>
+            <h2>Panel d’administration</h2>
+            <p class="activate-admin-note">Gère les prix, les codes promo et le contenu du site.</p>
             <div id="activate-admin-form"></div>
-            <button id="activate-admin-save" class="activate-main-btn" type="button">Enregistrer</button>
+            <button id="activate-admin-save" class="activate-main-btn" type="button">Enregistrer les modifications</button>
             <p id="activate-admin-message"></p>
           </div>
         </div>`);
       overlay = document.getElementById("activate-admin-overlay");
       document.getElementById("activate-admin-close").onclick = () => { overlay.hidden = true; };
     }
+
     const settings = window.ACTIVATE_SITE_SETTINGS || {
       plans: [
         { sku: "activate_basic", name: "Standard", monthlyPrice: 20.99, annualPrice: 228 },
         { sku: "activate_pro", name: "Accès anticipé", monthlyPrice: 42.99, annualPrice: 428 }
       ],
+      coupons: [],
       about: { title: "", text1: "", text2: "" }
     };
+    if (!Array.isArray(settings.coupons)) settings.coupons = [];
+
     const form = document.getElementById("activate-admin-form");
     form.innerHTML = `
-      <h3>Prix des abonnements</h3>
-      ${settings.plans.map((p, i) => `
-        <div class="activate-admin-plan">
-          <input data-admin-plan-name="${i}" value="${escapeHtml(p.name)}" aria-label="Nom ${i + 1}">
-          <input data-admin-monthly="${i}" type="number" min="0" step="0.01" value="${Number(p.monthlyPrice)}" aria-label="Prix mensuel">
-          <input data-admin-annual="${i}" type="number" min="0" step="0.01" value="${Number(p.annualPrice)}" aria-label="Prix annuel">
-        </div>`).join("")}
-      <h3>À propos</h3>
-      <label>Titre<input id="admin-about-title" value="${escapeHtml(settings.about?.title || "")}"></label>
-      <label>Texte 1<textarea id="admin-about-text1">${escapeHtml(settings.about?.text1 || "")}</textarea></label>
-      <label>Texte 2<textarea id="admin-about-text2">${escapeHtml(settings.about?.text2 || "")}</textarea></label>
+      <section class="activate-admin-section">
+        <h3>Produits et prix</h3>
+        <p class="activate-admin-help">Les nouveaux prix sont appliqués au site et aux articles déjà présents dans le panier.</p>
+        ${settings.plans.map((p, i) => `
+          <div class="activate-admin-plan activate-admin-row">
+            <input data-admin-plan-name="${i}" value="${escapeHtml(p.name)}" aria-label="Nom ${i + 1}" placeholder="Nom">
+            <input data-admin-plan-sku="${i}" value="${escapeHtml(p.sku || "")}" aria-label="SKU ${i + 1}" placeholder="SKU">
+            <label>Mensuel<input data-admin-monthly="${i}" type="number" min="0" step="0.01" value="${Number(p.monthlyPrice)}"></label>
+            <label>Annuel<input data-admin-annual="${i}" type="number" min="0" step="0.01" value="${Number(p.annualPrice)}"></label>
+          </div>`).join("")}
+      </section>
+
+      <section class="activate-admin-section">
+        <h3>Codes promo</h3>
+        <p class="activate-admin-help">Crée, modifie ou désactive les codes utilisables dans le panier.</p>
+        <div class="activate-admin-coupons">
+          ${settings.coupons.length ? settings.coupons.map((c, i) => `
+            <div class="activate-admin-coupon" data-coupon-row="${i}">
+              <div class="activate-admin-row">
+                <label>Code<input data-coupon-code="${i}" value="${escapeHtml(c.code || "")}" placeholder="PROMO20"></label>
+                <label>Type<select data-coupon-type="${i}">
+                  <option value="percent" ${(c.type || "percent") === "percent" ? "selected" : ""}>Pourcentage</option>
+                  <option value="fixed" ${c.type === "fixed" ? "selected" : ""}>Montant fixe</option>
+                </select></label>
+                <label>Valeur<input data-coupon-value="${i}" type="number" min="0" step="0.01" value="${Number(c.value) || 0}"></label>
+                <label>Minimum<input data-coupon-min="${i}" type="number" min="0" step="0.01" value="${Number(c.minAmount) || 0}"></label>
+                <label>Actif<select data-coupon-active="${i}">
+                  <option value="true" ${c.active !== false ? "selected" : ""}>Oui</option>
+                  <option value="false" ${c.active === false ? "selected" : ""}>Non</option>
+                </select></label>
+                <button type="button" class="activate-admin-delete" data-coupon-delete="${i}">Supprimer</button>
+              </div>
+              <div class="activate-admin-row">
+                <label>Début<input data-coupon-start="${i}" type="datetime-local" value="${escapeHtml(c.startsAt ? String(c.startsAt).slice(0,16) : "")}"></label>
+                <label>Expiration<input data-coupon-expire="${i}" type="datetime-local" value="${escapeHtml(c.expiresAt ? String(c.expiresAt).slice(0,16) : "")}"></label>
+                <label>Utilisations max<input data-coupon-max="${i}" type="number" min="0" step="1" value="${Number(c.maxUses) || 0}"></label>
+              </div>
+            </div>`).join("") : `<p class="activate-admin-empty">Aucun code promo configuré.</p>`}
+        </div>
+        <button type="button" id="activate-admin-add-coupon" class="activate-link-btn">+ Ajouter un code promo</button>
+      </section>
+
+      <section class="activate-admin-section">
+        <h3>À propos</h3>
+        <label>Titre<input id="admin-about-title" value="${escapeHtml(settings.about?.title || "")}"></label>
+        <label>Texte 1<textarea id="admin-about-text1">${escapeHtml(settings.about?.text1 || "")}</textarea></label>
+        <label>Texte 2<textarea id="admin-about-text2">${escapeHtml(settings.about?.text2 || "")}</textarea></label>
+      </section>
     `;
+
+    form.querySelector("#activate-admin-add-coupon")?.addEventListener("click", () => {
+      settings.coupons.push({code:"", type:"percent", value:10, minAmount:0, active:true, startsAt:"", expiresAt:"", maxUses:0});
+      openAdminPanel();
+    });
+
+    form.querySelectorAll("[data-coupon-delete]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        settings.coupons.splice(Number(btn.dataset.couponDelete), 1);
+        window.ACTIVATE_SITE_SETTINGS = settings;
+        openAdminPanel();
+      });
+    });
+
     const msg = document.getElementById("activate-admin-message");
     msg.textContent = "";
     document.getElementById("activate-admin-save").onclick = async () => {
@@ -217,31 +359,56 @@ function parseEuro(text) {
       msg.textContent = "Enregistrement…";
       try {
         const next = {
+          ...settings,
           plans: settings.plans.map((p, i) => ({
-            sku: p.sku,
+            ...p,
+            sku: form.querySelector(`[data-admin-plan-sku="${i}"]`).value.trim() || p.sku,
             name: form.querySelector(`[data-admin-plan-name="${i}"]`).value.trim(),
             monthlyPrice: Number(form.querySelector(`[data-admin-monthly="${i}"]`).value),
             annualPrice: Number(form.querySelector(`[data-admin-annual="${i}"]`).value)
           })),
+          coupons: Array.from(form.querySelectorAll("[data-coupon-code]")).map((_, i) => ({
+            code: form.querySelector(`[data-coupon-code="${i}"]`).value.trim().toUpperCase(),
+            type: form.querySelector(`[data-coupon-type="${i}"]`).value,
+            value: Number(form.querySelector(`[data-coupon-value="${i}"]`).value) || 0,
+            minAmount: Number(form.querySelector(`[data-coupon-min="${i}"]`).value) || 0,
+            active: form.querySelector(`[data-coupon-active="${i}"]`).value === "true",
+            startsAt: form.querySelector(`[data-coupon-start="${i}"]`).value || "",
+            expiresAt: form.querySelector(`[data-coupon-expire="${i}"]`).value || "",
+            maxUses: Number(form.querySelector(`[data-coupon-max="${i}"]`).value) || 0
+          })).filter(c => c.code),
           about: {
             title: document.getElementById("admin-about-title").value,
             text1: document.getElementById("admin-about-text1").value,
             text2: document.getElementById("admin-about-text2").value
           }
         };
+
+        for (const c of next.coupons) {
+          if (c.type === "percent" && c.value > 100) throw new Error(`Le code ${c.code} dépasse 100 %.`);
+          if (c.value < 0) throw new Error(`Valeur invalide pour ${c.code}.`);
+        }
+
         const result = await apiJson("/api/admin/settings", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ settings: next })
         });
-        window.ACTIVATE_SITE_SETTINGS = result.settings;
-        applySiteSettings(result.settings);
-        msg.textContent = "✓ Modifications enregistrées.";
+        window.ACTIVATE_SITE_SETTINGS = result.settings || next;
+        applySiteSettings(window.ACTIVATE_SITE_SETTINGS);
+        reconcileCartPrices();
+        msg.textContent = "✓ Prix et codes promo enregistrés.";
+        openCartIfOpen();
       } catch (e) {
         msg.textContent = `Erreur : ${e.message}`;
       } finally { save.disabled = false; }
     };
     overlay.hidden = false;
+  }
+
+  function openCartIfOpen() {
+    const box = document.getElementById("activate-cart-modal");
+    if (box && !box.hidden) openCart();
   }
 
 function setupUI() {
@@ -388,7 +555,8 @@ function setupUI() {
 
     const user = window.ACTIVATE_CURRENT_USER;
     const items = cart();
-    const total = items.reduce((sum, x) => sum + Number(x.price || 0), 0);
+    const pricing = cartPricing();
+    const total = pricing.total;
     const content = document.getElementById("activate-dashboard-direct-content");
 
     content.innerHTML = `
@@ -412,6 +580,8 @@ function setupUI() {
                     </div>
                   `).join("")}
                 </div>
+                <div class="activate-dashboard-total"><span>Sous-total</span><strong>${formatEUR(pricing.subtotal)}</strong></div>
+                ${pricing.discount > 0 ? `<div class="activate-dashboard-total"><span>Réduction ${escapeHtml(pricing.coupon.code)}</span><strong>−${formatEUR(pricing.discount)}</strong></div>` : ""}
                 <div class="activate-dashboard-total"><span>Total</span><strong>${formatEUR(total)}</strong></div>
                 <a class="activate-paypal-button" href="${paypalLink(total)}" target="_blank" rel="noopener noreferrer">
                   Payer ${formatEUR(total)} avec PayPal
@@ -588,7 +758,8 @@ function setupUI() {
     const activeBillingButton = document.querySelector('.cyber-billing-switch button.is-active, .cyber-billing-switch button[aria-pressed="true"]');
     const isAnnual = activeBillingButton?.textContent?.trim().toLowerCase() === "annuel";
     const plans = Array.from(document.querySelectorAll(".cyber-plan"));
-    const annualPrices = [228, 428];
+    const settings = getSiteSettings();
+    const configuredPlans = Array.isArray(settings.plans) ? settings.plans : [];
 
     plans.forEach((card, index) => {
       const priceStrong = card.querySelector(".cyber-plan-price strong");
@@ -602,7 +773,7 @@ function setupUI() {
       }
 
       const monthlyPrice = Number(card.dataset.activateMonthlyPrice);
-      const annualPrice = annualPrices[index];
+      const annualPrice = Number(configuredPlans[index]?.annualPrice || 0);
 
       if (isAnnual && annualPrice) {
         priceStrong.textContent = formatEUR(annualPrice);
@@ -659,11 +830,12 @@ function setupUI() {
       const activeBillingButton = document.querySelector(".cyber-billing-switch button.is-active, .cyber-billing-switch button[aria-pressed=\"true\"]");
       const annual = activeBillingButton?.textContent?.trim().toLowerCase() === "annuel";
       const planIndex = Array.from(document.querySelectorAll(".cyber-plan")).indexOf(card);
-      const price = annual && [228,428][planIndex] ? [228,428][planIndex] : parseEuro(button.textContent) || parseEuro(card.querySelector(".cyber-plan-price strong")?.textContent);
+      const configuredPlan = getSiteSettings().plans?.[planIndex];
+      const price = annual && Number(configuredPlan?.annualPrice) ? Number(configuredPlan.annualPrice) : Number(configuredPlan?.monthlyPrice) || parseEuro(button.textContent) || parseEuro(card.querySelector(".cyber-plan-price strong")?.textContent);
       const period = annual ? "annuel" : "mensuel";
       if (!price) return;
       const items = cart();
-      if (!items.some(x => x.name === name && x.period === period)) items.push({name, price, period});
+      if (!items.some(x => x.name === name && x.period === period)) items.push({name, price, period, sku: configuredPlan?.sku || ""});
       saveCart(items);
       openCart();
     }, true);
@@ -697,17 +869,17 @@ function setupUI() {
 
       const annualToggle = document.querySelector('.cyber-billing-switch button[aria-pressed="true"]');
       const isAnnual = !!document.querySelector('.cyber-billing-switch button.is-active') && document.querySelector('.cyber-billing-switch button.is-active')?.textContent?.trim().toLowerCase() === "annuel";
-      const annualPrices = [228, 428];
       const planIndex = Array.from(document.querySelectorAll(".cyber-plan")).indexOf(card);
+      const configuredPlan = getSiteSettings().plans?.[planIndex];
 
       let price;
       let period;
 
-      if (isAnnual && annualPrices[planIndex]) {
-        price = annualPrices[planIndex];
+      if (isAnnual && Number(configuredPlan?.annualPrice)) {
+        price = Number(configuredPlan.annualPrice);
         period = "annuel";
       } else {
-        price = parseEuro(card.querySelector(".cyber-plan-price strong")?.textContent);
+        price = Number(configuredPlan?.monthlyPrice) || parseEuro(card.querySelector(".cyber-plan-price strong")?.textContent);
         period = "mensuel";
       }
 
@@ -717,7 +889,7 @@ function setupUI() {
 
       const items = cart();
       if (!items.some(x => x.name === name && x.period === period)) {
-        items.push({ name, price: Number(price), period });
+        items.push({ name, price: Number(price), period, sku: configuredPlan?.sku || "" });
         saveCart(items);
       }
       openCart();
@@ -768,7 +940,8 @@ function renderDashboardIfPresent() {
 
   const user = window.ACTIVATE_CURRENT_USER;
   const items = cart();
-  const total = items.reduce((sum, x) => sum + Number(x.price || 0), 0);
+  const pricing = cartPricing();
+  const total = pricing.total;
 
   const dashboardTarget = document.getElementById("activate-dashboard-content") || root;
   dashboardTarget.innerHTML = `
@@ -792,7 +965,9 @@ function renderDashboardIfPresent() {
                   </div>
                 `).join("")}
               </div>
-              <div class="activate-dashboard-total"><span>Total</span><strong>${formatEUR(total)}</strong></div>
+              <div class="activate-dashboard-total"><span>Sous-total</span><strong>${formatEUR(pricing.subtotal)}</strong></div>
+                ${pricing.discount > 0 ? `<div class="activate-dashboard-total"><span>Réduction ${escapeHtml(pricing.coupon.code)}</span><strong>−${formatEUR(pricing.discount)}</strong></div>` : ""}
+                <div class="activate-dashboard-total"><span>Total</span><strong>${formatEUR(total)}</strong></div>
               <a class="activate-paypal-button" href="${paypalLink(total)}" target="_blank" rel="noopener noreferrer">
                 Payer ${formatEUR(total)} avec PayPal
               </a>
