@@ -1071,6 +1071,12 @@ function renderDashboardIfPresent() {
         }
       </section>
     </div>
+    <section class="activate-dashboard-card activate-owned-products-card" id="activate-owned-products">
+      <p class="activate-dashboard-kicker">MES PRODUITS</p>
+      <h2>Produits achetés</h2>
+      <p class="activate-dashboard-note">Les fonctionnalités disponibles dépendent de tes achats confirmés.</p>
+      <div id="activate-owned-products-list"><p class="activate-dashboard-empty">Chargement des achats…</p></div>
+    </section>
   `;
 
   dashboardTarget.querySelectorAll("[data-dashboard-remove]").forEach(btn => {
@@ -1081,6 +1087,47 @@ function renderDashboardIfPresent() {
       renderDashboardIfPresent();
     });
   });
+
+  renderOwnedProducts();
+}
+
+async function renderOwnedProducts() {
+  const box = document.getElementById("activate-owned-products-list");
+  if (!box) return;
+  const user = window.ACTIVATE_CURRENT_USER;
+  if (!user) { box.innerHTML = `<p class="activate-dashboard-empty">Connecte-toi pour voir tes produits.</p>`; return; }
+  try {
+    const [productsResult, extensionResult] = await Promise.all([apiJson("/api/account/products"), apiJson("/api/extension/access")]);
+    const products = Array.isArray(productsResult.products) ? productsResult.products : [];
+    const hasExtension = !!extensionResult.canManage;
+    box.innerHTML = `<div class="activate-owned-products-grid">${products.map(product => `
+      <article class="activate-owned-product"><div><span class="activate-owned-product-status">✓ ACHETÉ</span><h3>${escapeHtml(product.name)}</h3><small>${escapeHtml(product.sku)}</small></div><button type="button" class="activate-dashboard-manage" data-manage-product="${escapeHtml(product.sku)}">Gérer</button></article>`).join("")}
+      ${hasExtension ? `<article class="activate-owned-product activate-owned-product-extension"><div><span class="activate-owned-product-status">✓ DISPONIBLE</span><h3>Extension CDI</h3><small>${extensionResult.activeInstallations}/${extensionResult.installationLimit} ordinateurs actifs</small></div><button type="button" class="activate-dashboard-manage" id="activate-extension-manage">Gérer</button></article>` : ""}
+      ${!products.length && !hasExtension ? `<p class="activate-dashboard-empty">Aucun produit acheté pour le moment.</p>` : ""}</div><div id="activate-product-manager"></div>`;
+    box.querySelectorAll("[data-manage-product]").forEach(btn => btn.addEventListener("click", () => {
+      const manager=document.getElementById("activate-product-manager"); if(!manager) return;
+      const sku=btn.dataset.manageProduct;
+      if(sku === "activate_pro") { manager.innerHTML=`<div class="activate-product-manager"><div class="activate-product-manager-head"><div><span class="activate-dashboard-kicker">PRODUIT</span><h3>Accès anticipé</h3></div><button type="button" data-close-product-manager>×</button></div><p>Gère les fonctionnalités liées à ton produit, notamment l’Extension CDI.</p><button type="button" class="activate-dashboard-primary" id="activate-extension-manage-2">Gérer l’Extension CDI</button></div>`; manager.querySelector("#activate-extension-manage-2")?.addEventListener("click",openExtensionManager);
+      } else { manager.innerHTML=`<div class="activate-product-manager"><div class="activate-product-manager-head"><div><span class="activate-dashboard-kicker">PRODUIT</span><h3>${escapeHtml(btn.closest("article")?.querySelector("h3")?.textContent || sku)}</h3></div><button type="button" data-close-product-manager>×</button></div><p>La gestion détaillée de ce produit sera disponible ici.</p></div>`; }
+      manager.querySelector("[data-close-product-manager]")?.addEventListener("click",()=>manager.innerHTML="");
+    }));
+    box.querySelector("#activate-extension-manage")?.addEventListener("click",openExtensionManager);
+  } catch(e) { box.innerHTML=`<p class="activate-dashboard-empty">Impossible de charger les produits : ${escapeHtml(e.message || "Erreur API")}</p>`; }
+}
+
+async function openExtensionManager() {
+  const manager=document.getElementById("activate-product-manager"); if(!manager) return; manager.innerHTML=`<div class="activate-product-manager"><p>Chargement…</p></div>`;
+  try {
+    const access=await apiJson("/api/extension/access"); if(!access.canManage) { manager.innerHTML=`<div class="activate-product-manager"><h3>Extension CDI verrouillée</h3><p>Ce produit n’est pas disponible sur ton compte.</p></div>`; return; }
+    manager.innerHTML=`<div class="activate-product-manager"><div class="activate-product-manager-head"><div><span class="activate-dashboard-kicker">EXTENSION CDI</span><h3>Sites bloqués</h3></div><button type="button" data-close-extension>×</button></div><p>Ajoute, désactive ou supprime les sites bloqués. Les règles sont enregistrées par l’API.</p><div class="activate-extension-install"><div><strong>Installation</strong><small>Génère un code pour un ordinateur CDI.</small></div><button type="button" class="activate-dashboard-primary" id="activate-extension-generate-code">Générer un code</button></div><div id="activate-extension-code-box"></div><form id="activate-extension-site-form" class="activate-extension-site-form"><input id="activate-extension-site-input" type="text" maxlength="253" placeholder="youtube.com" autocomplete="off" required><button type="submit" class="activate-dashboard-primary">+ Ajouter</button></form><p id="activate-extension-site-message" class="activate-dashboard-note"></p><div id="activate-extension-sites" class="activate-extension-sites"></div></div>`;
+    manager.querySelector("[data-close-extension]")?.addEventListener("click",()=>manager.innerHTML="");
+    manager.querySelector("#activate-extension-generate-code")?.addEventListener("click",async()=>{const btn=manager.querySelector("#activate-extension-generate-code"),box=manager.querySelector("#activate-extension-code-box");btn.disabled=true;btn.textContent="Génération…";try{const result=await apiJson("/api/extension/install/create",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});box.innerHTML=`<div class="activate-extension-code"><strong>${escapeHtml(result.code)}</strong><small>Expire le ${escapeHtml(new Date(result.expiresAt).toLocaleString("fr-FR"))}</small></div>`}catch(e){box.innerHTML=`<p class="activate-dashboard-note">${escapeHtml(e.message || "Impossible de générer le code.")}</p>`}finally{btn.disabled=false;btn.textContent="Générer un code"}});
+    const loadSites=async()=>{ const result=await apiJson("/api/extension/sites"); const list=manager.querySelector("#activate-extension-sites"); list.innerHTML=result.sites.length ? result.sites.map(x=>`<div class="activate-extension-site-row"><div><strong>${escapeHtml(x.site)}</strong><small>${x.enabled===false?"Désactivé":"Bloqué"}</small></div><div class="activate-extension-site-actions"><button type="button" data-toggle-site="${escapeHtml(x.site)}">${x.enabled===false?"Activer":"Désactiver"}</button><button type="button" class="danger" data-delete-site="${escapeHtml(x.site)}">Supprimer</button></div></div>`).join(""):`<p class="activate-dashboard-empty">Aucun site bloqué.</p>`;
+      list.querySelectorAll("[data-delete-site]").forEach(btn=>btn.addEventListener("click",async()=>{if(!confirm(`Supprimer ${btn.dataset.deleteSite} ?`))return;try{await apiJson(`/api/extension/sites/${encodeURIComponent(btn.dataset.deleteSite)}`,{method:"DELETE"});await loadSites()}catch(e){manager.querySelector("#activate-extension-site-message").textContent=e.message}}));
+      list.querySelectorAll("[data-toggle-site]").forEach(btn=>btn.addEventListener("click",async()=>{const disabled=btn.closest(".activate-extension-site-row")?.querySelector("small")?.textContent==="Désactivé";try{await apiJson(`/api/extension/sites/${encodeURIComponent(btn.dataset.toggleSite)}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled:disabled})});await loadSites()}catch(e){manager.querySelector("#activate-extension-site-message").textContent=e.message}})); };
+    manager.querySelector("#activate-extension-site-form").addEventListener("submit",async e=>{e.preventDefault();const input=manager.querySelector("#activate-extension-site-input"),msg=manager.querySelector("#activate-extension-site-message");try{await apiJson("/api/extension/sites",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({site:input.value})});input.value="";msg.textContent="Site ajouté.";await loadSites()}catch(err){msg.textContent=err.message||"Impossible d’ajouter le site."}});
+    await loadSites();
+  } catch(e) { manager.innerHTML=`<div class="activate-product-manager"><h3>Erreur</h3><p>${escapeHtml(e.message || "Impossible de charger l’extension.")}</p></div>`; }
 }
 
 window.addEventListener("activate-auth-changed", renderDashboardIfPresent);

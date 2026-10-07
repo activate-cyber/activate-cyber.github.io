@@ -1,0 +1,1 @@
+V29 : menu Compte via pseudo, changement de langue Français/English/Türkçe avec application à la page, et panneau admin Fonctions Firebase avec activation et limite d'âge du compte (ex. 30 jours). Pour une vraie sécurité, le réglage doit être vérifié côté backend/Firebase Admin.
