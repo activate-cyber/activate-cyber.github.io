@@ -9,9 +9,9 @@
     tr: { btn: "Portfolyo", title: "Portfolyo", lead: "Ekip ve oluşturduklarımız.", team: "Ekip", work: "Projeler", close: "Kapat" }
   };
   var PEOPLE = [
-    { name: "Prénom Nom", role: { fr: "Fondatrice ou fondateur", en: "Founder", tr: "Kurucu" } },
-    { name: "Prénom Nom", role: { fr: "Développement", en: "Development", tr: "Geliştirme" } },
-    { name: "Prénom Nom", role: { fr: "Design", en: "Design", tr: "Tasarım" } }
+    { name: "echo_rouge", role: { fr: "Fondateur", en: "Founder", tr: "Kurucu" } },
+    { name: "ActivateTeam", role: { fr: "Développement", en: "Development", tr: "Geliştirme" } },
+    { name: "ActivateDesign", role: { fr: "Design", en: "Design", tr: "Tasarım" } }
   ];
   var PROJECTS = [
     { name: "Activate Basic", text: { fr: "L’offre d’entrée du site Activate.", en: "The entry plan of the Activate site.", tr: "Activate sitesinin başlangıç planı." } },
