@@ -1,4 +1,4 @@
-/* Activate V31 — Portfolio en superposition (bouton en bas à gauche) */
+/* Activate V31 — Portfolio en superposition (bouton dans le pied de page) */
 (function () {
   "use strict";
 
@@ -9,9 +9,9 @@
     tr: { btn: "Portfolyo", title: "Portfolyo", lead: "Ekip ve oluşturduklarımız.", team: "Ekip", work: "Projeler", close: "Kapat" }
   };
   var PEOPLE = [
-    { name: "echo_rouge", role: { fr: "Fondateur", en: "Founder", tr: "Kurucu" } },
-    { name: "ActivateTeam", role: { fr: "Développement", en: "Development", tr: "Geliştirme" } },
-    { name: "ActivateDesign", role: { fr: "Design", en: "Design", tr: "Tasarım" } }
+    { name: "Prénom Nom", role: { fr: "Fondatrice ou fondateur", en: "Founder", tr: "Kurucu" } },
+    { name: "Prénom Nom", role: { fr: "Développement", en: "Development", tr: "Geliştirme" } },
+    { name: "Prénom Nom", role: { fr: "Design", en: "Design", tr: "Tasarım" } }
   ];
   var PROJECTS = [
     { name: "Activate Basic", text: { fr: "L’offre d’entrée du site Activate.", en: "The entry plan of the Activate site.", tr: "Activate sitesinin başlangıç planı." } },
@@ -24,7 +24,7 @@
   var btn = null, overlay = null, lastFocus = null;
   function lang() { var l = window.ACTIVATE_LANG || localStorage.getItem("activate_language") || "fr"; return UI[l] ? l : "fr"; }
   function el(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
-  function labelButton() { if (btn) btn.textContent = UI[lang()].btn; }
+  function labelButton() { if (btn && btn.textContent !== UI[lang()].btn) btn.textContent = UI[lang()].btn; }
 
   function onKey(e) { if (e.key === "Escape") close(); }
   function close() {
@@ -57,11 +57,23 @@
     x.focus();
   }
 
-  function init() {
-    btn = el("button", "", ""); btn.id = "activate-portfolio-btn"; btn.type = "button";
-    btn.addEventListener("click", open);
-    document.body.appendChild(btn);
+  // Le pied de page est créé par l'application React : on attend qu'il existe et on y remet le bouton s'il disparaît.
+  function mountButton() {
+    var footer = document.querySelector(".cyber-footer");
+    if (!footer) return;
+    if (!btn) {
+      btn = el("button", "activate-portfolio-link", ""); btn.id = "activate-portfolio-btn"; btn.type = "button";
+      btn.addEventListener("click", open);
+    }
+    if (btn.parentNode !== footer) footer.insertBefore(btn, footer.lastElementChild);
     labelButton();
+  }
+  var scheduled = false;
+  function schedule() { if (scheduled) return; scheduled = true; requestAnimationFrame(function () { scheduled = false; mountButton(); }); }
+
+  function init() {
+    mountButton();
+    new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
     window.addEventListener("activate-language-changed", labelButton);
     var orig = window.activateSetLanguage; // le sélecteur de langue du site passe par cette fonction
     if (typeof orig === "function") window.activateSetLanguage = function () { var r = orig.apply(this, arguments); labelButton(); return r; };
