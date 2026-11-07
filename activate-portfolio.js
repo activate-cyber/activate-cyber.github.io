@@ -42,7 +42,7 @@
     overlay = el("div", "activate-overlay");
     overlay.addEventListener("click", function (e) { if (e.target === overlay) close(); });
     var card = el("div", "activate-portfolio-card");
-    card.setAttribute("role", "dialog"); card.setAttribute("aria-modal", "true"); card.setAttribute("aria-label", t.title);
+    card.setAttribute("data-no-i18n", ""); card.setAttribute("role", "dialog"); card.setAttribute("aria-modal", "true"); card.setAttribute("aria-label", t.title);
     var x = el("button", "activate-close", "×"); x.type = "button"; x.setAttribute("aria-label", t.close); x.addEventListener("click", close);
     card.appendChild(x);
     card.appendChild(el("h2", "", t.title));
