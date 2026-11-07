@@ -305,6 +305,7 @@ function parseEuro(text) {
         <div class="activate-admin-tabs">
           <button type="button" class="activate-link-btn" id="activate-codes-created-tab">Codes créés</button>
           <button type="button" class="activate-link-btn" id="activate-code-create-tab">Créer un code</button>
+          <button type="button" class="activate-link-btn" id="activate-code-test-tab">Code de test</button>
         </div>
         <div id="activate-codes-created-view">
           <p class="activate-admin-help">Les codes déjà créés peuvent uniquement être supprimés.</p>
@@ -320,6 +321,11 @@ function parseEuro(text) {
                 <button type="button" class="activate-admin-delete" data-coupon-delete="${i}">Supprimer</button>
               </div>`).join("") : `<p class="activate-admin-empty">Aucun code promo configuré.</p>`}
           </div>
+        </div>
+        <div id="activate-code-test-view" hidden>
+          <p class="activate-admin-help">Génère un code pour tester le produit (extension) sans acheter. Il est valable 15 minutes et s’utilise une seule fois.</p>
+          <button type="button" id="activate-admin-test-code" class="activate-main-btn">Générer un code de test</button>
+          <p id="activate-test-code-result" aria-live="polite"></p>
         </div>
         <div id="activate-code-create-view" hidden>
           <p class="activate-admin-help">Crée un nouveau code. Après création, il apparaîtra dans « Codes créés ».</p>
@@ -344,8 +350,21 @@ function parseEuro(text) {
 
     const createdView = form.querySelector("#activate-codes-created-view");
     const createView = form.querySelector("#activate-code-create-view");
-    form.querySelector("#activate-codes-created-tab")?.addEventListener("click", () => { createdView.hidden = false; createView.hidden = true; });
-    form.querySelector("#activate-code-create-tab")?.addEventListener("click", () => { createdView.hidden = true; createView.hidden = false; });
+    const testView = form.querySelector("#activate-code-test-view");
+    const showCodeView = (v) => { createdView.hidden = v !== createdView; createView.hidden = v !== createView; testView.hidden = v !== testView; };
+    form.querySelector("#activate-codes-created-tab")?.addEventListener("click", () => showCodeView(createdView));
+    form.querySelector("#activate-code-create-tab")?.addEventListener("click", () => showCodeView(createView));
+    form.querySelector("#activate-code-test-tab")?.addEventListener("click", () => showCodeView(testView));
+    form.querySelector("#activate-admin-test-code")?.addEventListener("click", async () => {
+      const out = form.querySelector("#activate-test-code-result");
+      out.textContent = "Génération du code…";
+      try {
+        const r = await apiJson("/api/extension/install/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+        const mins = Math.max(1, Math.round((Date.parse(r.expiresAt) - Date.now()) / 60000));
+        out.innerHTML = `Code : <strong style="font-size:20px;letter-spacing:3px;user-select:all">${escapeHtml(r.code)}</strong> (valable ${mins} min)`;
+        try { await navigator.clipboard.writeText(r.code); } catch (_) {}
+      } catch (e) { out.textContent = e.message || "Impossible de générer le code."; }
+    });
 
     form.querySelectorAll("[data-coupon-delete]").forEach(btn => {
       btn.addEventListener("click", () => {
